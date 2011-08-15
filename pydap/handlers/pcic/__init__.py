@@ -57,6 +57,7 @@ longitude = %f
 
 [time]
 name = "time"
+axis = "T"
 col = "obs_time"
 units = "seconds since 1970-01-01"
 long_name = "observation time"
