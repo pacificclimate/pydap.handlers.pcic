@@ -27,11 +27,17 @@ class PcicSqlHandler(SqlHandler):
 
         get_loc_query = "SELECT x(the_geom) as longitude, y(the_geom) as latitude FROM meta_history WHERE station_id = %s" % stn_id
         cur.execute(get_loc_query)
-        lat, lon = cur.fetchone()
+        try:
+            lat, lon = cur.fetchone()
+        except TypeError:
+            lat = lon = float('nan')
 
         get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % stn_id
         cur.execute(get_stn_query)
-        station_id, station_name, network = cur.fetchone()
+        try:
+            station_id, station_name, network = cur.fetchone()
+        except TypeError:
+            station_id, station_name, network = (stn_id, '', '')
         
         s = '''[database]
 dsn = "postgresql://httpd:'R3@d0nly'@localhost/crmp"
