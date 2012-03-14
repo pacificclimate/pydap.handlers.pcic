@@ -88,11 +88,10 @@ missing_value = -9999
 
 ''' %(var_name, var_name, long_description, standard_name, unit, cell_method, var_name)
 
-        print s
         s = StringIO(s)
 
         SqlHandler.__init__(self, s)
-        print "In SqlHander.__init__(self, s)"
+        print "In SqlHander.__init__(self, %s)" % stn_id
 
 if __name__ == '__main__':
 
