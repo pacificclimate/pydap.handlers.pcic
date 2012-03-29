@@ -72,7 +72,7 @@ missing_value = -9999
 
 ''' % (full_query[0], network, station_id, station_name, network, lat, lon)
 
-        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s" % stn_id
+        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
         cur.execute(get_var_query)
         
         for var_name, unit, standard_name, cell_method, long_description in cur.fetchall():
