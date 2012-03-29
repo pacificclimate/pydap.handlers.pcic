@@ -14,7 +14,8 @@ setup(
     author_email="hiebert@uvic.ca",
     namespace_packages=['pydap', 'pydap.handlers'],
     entry_points='''[pydap.handler]
-                    psql = pydap.handlers.pcic:PcicSqlHandler
+                    rsql = pydap.handlers.pcic:RawPcicSqlHandler
+                    csql = pydap.handlers.pcic:ClimoPcicSqlHandler
                  ''',
     install_requires=['pydap.handlers.sql'],
     zip_safe=True,

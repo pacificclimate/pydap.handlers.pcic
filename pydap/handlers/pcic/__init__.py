@@ -14,16 +14,14 @@ class PcicSqlHandler(SqlHandler):
     # stn_id should be the native station id.  The database station_id is looked up from that.
     def __init__(self, stn_id):
 
+        cur = self.con.cursor()
         stn_id = stn_id.split(os.sep)[-1].split('.')[0]
         q = "SELECT station_id FROM meta_station WHERE native_id = '%s'" % stn_id
         cur = self.con.cursor()
         cur.execute(q)
         stn_id = cur.fetchone()
 
-        query_string = "SELECT query_one_station(%s)" % stn_id
-        cur = self.con.cursor()
-        cur.execute(query_string)
-        full_query = cur.fetchone()
+        full_query = self.get_full_query(stn_id)
 
         get_loc_query = "SELECT x(the_geom) as longitude, y(the_geom) as latitude FROM meta_history WHERE station_id = %s" % stn_id
         cur.execute(get_loc_query)
@@ -70,12 +68,12 @@ long_name = "observation time"
 type = "Float64"
 missing_value = -9999
 
-''' % (full_query[0], network, station_id, station_name, network, lat, lon)
+''' % (full_query, network, station_id, station_name, network, lat, lon)
 
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
-        cur.execute(get_var_query)
+        stn_vars = self.get_vars(stn_id)
         
-        for var_name, unit, standard_name, cell_method, long_description in cur.fetchall():
+        for var_name, unit, standard_name, cell_method, long_description in stn_vars:
             s = s + '''[%s]
 name = "%s"
 long_name = "%s"
@@ -92,6 +90,43 @@ missing_value = -9999
 
         SqlHandler.__init__(self, s)
         print "In SqlHander.__init__(self, %s)" % stn_id
+
+    def get_full_query(self, stn_id):
+        raise NotImplementedError
+
+    def get_vars(self, stn_id):
+        raise NotImplementedError
+
+class RawPcicSqlHandler(PcicSqlHandler):
+    extensions = re.compile(r"^.*\.rsql$", re.IGNORECASE)
+
+    def get_full_query(self, stn_id):
+        cur = self.con.cursor()
+        query_string = "SELECT query_one_station(%s)" % stn_id
+        cur.execute(query_string)
+        return cur.fetchone()[0]
+
+    def get_vars(self, stn_id):
+        cur = self.con.cursor()
+        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
+        cur.execute(get_var_query)
+        return cur.fetchall()
+
+
+class ClimoPcicSqlHandler(PcicSqlHandler):
+    extensions = re.compile(r"^.*\.csql$", re.IGNORECASE)
+
+    def get_full_query(self, stn_id):
+        query_string = "SELECT query_one_station_climo(%s)" % stn_id
+        cur = self.con.cursor()
+        cur.execute(query_string)
+        return cur.fetchone()[0]
+
+    def get_vars(self, stn_id):
+        cur = self.con.cursor()
+        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
+        cur.execute(get_var_query)
+        return cur.fetchall()
 
 if __name__ == '__main__':
 
