@@ -43,21 +43,21 @@ id = "obs_time"
 table = "(%s) as foo"
 
 [dataset]
-name = "CRMP/%s"
-owner = "PCIC"
-contact = "hiebert@uvic.ca"
-version = 0.1
 
     [[NC_GLOBAL]]
+    name = "CRMP/%s"
+    owner = "PCIC"
+    contact = "Faron Anslow <fanslow@uvic.ca>"
+    version = 0.1
+    station_id = "%s"
+    station_name = "%s"
+    network = "%s"
+    latitude = %f
+    longitude = %f
     history = "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database"
 
 [sequence]
 name = "station_observations"
-station_id = "%s"
-station_name = "%s"
-network = "%s"
-latitude = %f
-longitude = %f
 
 [time]
 name = "time"
