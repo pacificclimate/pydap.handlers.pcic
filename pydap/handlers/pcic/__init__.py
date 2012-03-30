@@ -73,9 +73,10 @@ missing_value = -9999
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
         stn_vars = self.get_vars(stn_id)
         
-        for var_name, unit, standard_name, cell_method, long_description in stn_vars:
+        for var_name, unit, standard_name, cell_method, long_description, display_name in stn_vars:
             s = s + '''[%s]
 name = "%s"
+display_name = "%s"
 long_name = "%s"
 standard_name = "%s"
 units = "%s"
@@ -84,7 +85,7 @@ col = "%s"
 axis = "Y"
 missing_value = -9999
 
-''' %(var_name, var_name, long_description, standard_name, unit, cell_method, var_name)
+''' %(var_name, var_name, display_name, long_description, standard_name, unit, cell_method, var_name)
 
         s = StringIO(s)
 
@@ -108,7 +109,7 @@ class RawPcicSqlHandler(PcicSqlHandler):
 
     def get_vars(self, stn_id):
         cur = self.con.cursor()
-        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
+        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
         cur.execute(get_var_query)
         return cur.fetchall()
 
@@ -124,7 +125,8 @@ class ClimoPcicSqlHandler(PcicSqlHandler):
 
     def get_vars(self, stn_id):
         cur = self.con.cursor()
-        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
+        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
+        print get_var_query
         cur.execute(get_var_query)
         return cur.fetchall()
 
