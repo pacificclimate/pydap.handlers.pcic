@@ -90,7 +90,6 @@ missing_value = -9999
         s = StringIO(s)
 
         SqlHandler.__init__(self, s)
-        print "In SqlHander.__init__(self, %s)" % stn_id
 
     def get_full_query(self, stn_id):
         raise NotImplementedError
@@ -126,7 +125,6 @@ class ClimoPcicSqlHandler(PcicSqlHandler):
     def get_vars(self, stn_id):
         cur = self.con.cursor()
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
-        print get_var_query
         cur.execute(get_var_query)
         return cur.fetchall()
 
