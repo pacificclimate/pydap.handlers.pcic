@@ -25,42 +25,35 @@ class PcicSqlHandler(SqlHandler):
 
         q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (stn_id, net_name)
         cur.execute(q)
-        stn_id = cur.fetchone()
+        stn_id = cur.fetchone()[0]
 
         full_query = self.get_full_query(stn_id, cur)
-
-        get_loc_query = "SELECT x(the_geom) as longitude, y(the_geom) as latitude FROM meta_history WHERE station_id = %s" % stn_id
-        cur.execute(get_loc_query)
-        try:
-            lat, lon = cur.fetchone()
-        except TypeError:
-            lat = lon = float('nan')
 
         get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % stn_id
         cur.execute(get_stn_query)
         try:
-            station_id, station_name, network = cur.fetchone()
+            native_id, station_name, network = cur.fetchone()
         except TypeError:
-            station_id, station_name, network = (stn_id, '', '')
+            native_id, station_name, network = (stn_id, '', '')
 
         dsn = "postgresql://%(user)s:'%(password)s'@%(host)s/%(database)s" % conn_params
         s = '''database:
-  dsn: "%s"
+  dsn: "%(dsn)s"
   id: "obs_time"
-  table: "(%s) as foo"
+  table: "(%(full_query)s) as foo"
 
 dataset:
 
   NC_GLOBAL:
-    name: "CRMP/%s"
+    name: "CRMP/%(network)s"
     owner: "PCIC"
     contact: "Faron Anslow <fanslow@uvic.ca>"
-    version: 0.1
-    station_id: "%s"
-    station_name: "%s"
-    network: "%s"
-    latitude: %f
-    longitude: %f
+    version: 0.2
+    station_id: "%(native_id)s"
+    station_name: "%(station_name)s"
+    network: "%(network)s"
+    latitude: !Query \'SELECT y(the_geom) FROM meta_history WHERE station_id = %(station_id)d\'
+    longitude: !Query \'SELECT x(the_geom) FROM meta_history WHERE station_id = %(station_id)d\'
     history: "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database"
 
 sequence:
@@ -70,14 +63,11 @@ time:
   name: "time"
   axis: "T"
   col: "obs_time"
-  units: "seconds since 1970-01-01"
   long_name: "observation time"
-  type: "Float64"
-  missing_value: -9999
+  type: "String"
 
-''' % (dsn, full_query, network, station_id, station_name, network, lat, lon)
+''' % {'dsn': dsn, 'full_query': full_query, 'network': network, 'native_id': native_id, 'station_id': stn_id, 'station_name': station_name}
 
-        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
         stn_vars = self.get_vars(stn_id, cur)
         
         for var_name, unit, standard_name, cell_method, long_description, display_name in stn_vars:
