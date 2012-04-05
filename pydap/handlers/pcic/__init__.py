@@ -22,7 +22,7 @@ class PcicSqlHandler(SqlHandler):
         cur = self.getcur(conn_params)
 
         net_name, stn_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
-        print net_name, stn_id
+
         q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (stn_id, net_name)
         cur.execute(q)
         stn_id = cur.fetchone()
@@ -44,36 +44,36 @@ class PcicSqlHandler(SqlHandler):
             station_id, station_name, network = (stn_id, '', '')
 
         dsn = "postgresql://%(user)s:'%(password)s'@%(host)s/%(database)s" % conn_params
-        s = '''[database]
-dsn = "%s"
-id = "obs_time"
-table = "(%s) as foo"
+        s = '''database:
+  dsn: "%s"
+  id: "obs_time"
+  table: "(%s) as foo"
 
-[dataset]
+dataset:
 
-    [[NC_GLOBAL]]
-    name = "CRMP/%s"
-    owner = "PCIC"
-    contact = "Faron Anslow <fanslow@uvic.ca>"
-    version = 0.1
-    station_id = "%s"
-    station_name = "%s"
-    network = "%s"
-    latitude = %f
-    longitude = %f
-    history = "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database"
+  NC_GLOBAL:
+    name: "CRMP/%s"
+    owner: "PCIC"
+    contact: "Faron Anslow <fanslow@uvic.ca>"
+    version: 0.1
+    station_id: "%s"
+    station_name: "%s"
+    network: "%s"
+    latitude: %f
+    longitude: %f
+    history: "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database"
 
-[sequence]
-name = "station_observations"
+sequence:
+  name: "station_observations"
 
-[time]
-name = "time"
-axis = "T"
-col = "obs_time"
-units = "seconds since 1970-01-01"
-long_name = "observation time"
-type = "Float64"
-missing_value = -9999
+time:
+  name: "time"
+  axis: "T"
+  col: "obs_time"
+  units: "seconds since 1970-01-01"
+  long_name: "observation time"
+  type: "Float64"
+  missing_value: -9999
 
 ''' % (dsn, full_query, network, station_id, station_name, network, lat, lon)
 
@@ -81,16 +81,16 @@ missing_value = -9999
         stn_vars = self.get_vars(stn_id, cur)
         
         for var_name, unit, standard_name, cell_method, long_description, display_name in stn_vars:
-            s = s + '''[%s]
-name = "%s"
-display_name = "%s"
-long_name = "%s"
-standard_name = "%s"
-units = "%s"
-cell_method = "%s"
-col = "%s"
-axis = "Y"
-missing_value = -9999
+            s = s + '''%s:
+  name: "%s"
+  display_name: "%s"
+  long_name: "%s"
+  standard_name: "%s"
+  units: "%s"
+  cell_method: "%s"
+  col: "%s"
+  axis: "Y"
+  missing_value: -9999
 
 ''' %(var_name, var_name, display_name, long_description, standard_name, unit, cell_method, var_name)
 
