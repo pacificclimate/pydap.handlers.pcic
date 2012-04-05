@@ -2,26 +2,32 @@ import os
 import re
 from StringIO import StringIO
 import psycopg2
-import pdb
 
 from pydap.handlers.sql import Handler as SqlHandler
 
 class PcicSqlHandler(SqlHandler):
 
     extensions = re.compile(r"^.*\.psql$", re.IGNORECASE)
-    con = psycopg2.connect(database='crmp', user='httpd', password='R3@d0nly', host='localhost')
 
-    # stn_id should be the native station id.  The database station_id is looked up from that.
-    def __init__(self, stn_id):
+    @staticmethod
+    def getcur(params):
+        con = psycopg2.connect(**params)
+        return con.cursor()
 
-        cur = self.con.cursor()
-        stn_id = stn_id.split(os.sep)[-1].split('.')[0]
-        q = "SELECT station_id FROM meta_station WHERE native_id = '%s'" % stn_id
-        cur = self.con.cursor()
+    def create_ini(self, environ):
+        # This will be something like .../[network_name]/[native_id].rsql
+        # The database station_id is looked up from that
+        filepath = self.filepath
+        conn_params = eval(environ.get('pydap.handlers.pcic.conn_params'))
+        cur = self.getcur(conn_params)
+
+        net_name, stn_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
+        print net_name, stn_id
+        q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (stn_id, net_name)
         cur.execute(q)
         stn_id = cur.fetchone()
 
-        full_query = self.get_full_query(stn_id)
+        full_query = self.get_full_query(stn_id, cur)
 
         get_loc_query = "SELECT x(the_geom) as longitude, y(the_geom) as latitude FROM meta_history WHERE station_id = %s" % stn_id
         cur.execute(get_loc_query)
@@ -36,9 +42,10 @@ class PcicSqlHandler(SqlHandler):
             station_id, station_name, network = cur.fetchone()
         except TypeError:
             station_id, station_name, network = (stn_id, '', '')
-        
+
+        dsn = "postgresql://%(user)s:'%(password)s'@%(host)s/%(database)s" % conn_params
         s = '''[database]
-dsn = "postgresql://httpd:'R3@d0nly'@localhost/crmp"
+dsn = "%s"
 id = "obs_time"
 table = "(%s) as foo"
 
@@ -68,10 +75,10 @@ long_name = "observation time"
 type = "Float64"
 missing_value = -9999
 
-''' % (full_query, network, station_id, station_name, network, lat, lon)
+''' % (dsn, full_query, network, station_id, station_name, network, lat, lon)
 
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description FROM meta_station NATURAL JOIN meta_network NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
-        stn_vars = self.get_vars(stn_id)
+        stn_vars = self.get_vars(stn_id, cur)
         
         for var_name, unit, standard_name, cell_method, long_description, display_name in stn_vars:
             s = s + '''[%s]
@@ -87,27 +94,27 @@ missing_value = -9999
 
 ''' %(var_name, var_name, display_name, long_description, standard_name, unit, cell_method, var_name)
 
-        s = StringIO(s)
+        return StringIO(s)
 
-        SqlHandler.__init__(self, s)
+    def parse_constraints(self, environ):
+        self.filepath = self.create_ini(environ)
+        return SqlHandler.parse_constraints(self, environ)
 
-    def get_full_query(self, stn_id):
+    def get_full_query(self, stn_id, cur):
         raise NotImplementedError
 
-    def get_vars(self, stn_id):
+    def get_vars(self, stn_id, cur):
         raise NotImplementedError
 
 class RawPcicSqlHandler(PcicSqlHandler):
     extensions = re.compile(r"^.*\.rsql$", re.IGNORECASE)
 
-    def get_full_query(self, stn_id):
-        cur = self.con.cursor()
+    def get_full_query(self, stn_id, cur):
         query_string = "SELECT query_one_station(%s)" % stn_id
         cur.execute(query_string)
         return cur.fetchone()[0]
 
-    def get_vars(self, stn_id):
-        cur = self.con.cursor()
+    def get_vars(self, stn_id, cur):
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
         cur.execute(get_var_query)
         return cur.fetchall()
@@ -116,14 +123,12 @@ class RawPcicSqlHandler(PcicSqlHandler):
 class ClimoPcicSqlHandler(PcicSqlHandler):
     extensions = re.compile(r"^.*\.csql$", re.IGNORECASE)
 
-    def get_full_query(self, stn_id):
+    def get_full_query(self, stn_id, cur):
         query_string = "SELECT query_one_station_climo(%s)" % stn_id
-        cur = self.con.cursor()
         cur.execute(query_string)
         return cur.fetchone()[0]
 
-    def get_vars(self, stn_id):
-        cur = self.con.cursor()
+    def get_vars(self, stn_id, cur):
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
         cur.execute(get_var_query)
         return cur.fetchall()
