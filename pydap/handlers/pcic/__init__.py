@@ -4,6 +4,7 @@ from StringIO import StringIO
 import psycopg2
 
 from pydap.handlers.sql import Handler as SqlHandler
+from pdb import set_trace
 
 class PcicSqlHandler(SqlHandler):
 
@@ -21,20 +22,20 @@ class PcicSqlHandler(SqlHandler):
         conn_params = eval(environ.get('pydap.handlers.pcic.conn_params'))
         cur = self.getcur(conn_params)
 
-        net_name, stn_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
+        net_name, native_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
 
-        q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (stn_id, net_name)
+        q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (native_id, net_name)
         cur.execute(q)
-        stn_id = cur.fetchone()[0]
+        station_id = cur.fetchone()[0]
 
-        full_query = self.get_full_query(stn_id, cur)
+        full_query = self.get_full_query(station_id, cur)
 
-        get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % stn_id
+        get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % station_id
         cur.execute(get_stn_query)
         try:
             native_id, station_name, network = cur.fetchone()
         except TypeError:
-            native_id, station_name, network = (stn_id, '', '')
+            native_id, station_name, network = (station_id, '', '')
 
         dsn = "postgresql://%(user)s:'%(password)s'@%(host)s/%(database)s" % conn_params
         s = '''database:
@@ -66,23 +67,23 @@ time:
   long_name: "observation time"
   type: "String"
 
-''' % {'dsn': dsn, 'full_query': full_query, 'network': network, 'native_id': native_id, 'station_id': stn_id, 'station_name': station_name}
+''' % locals()
 
-        stn_vars = self.get_vars(stn_id, cur)
+        stn_vars = self.get_vars(station_id, cur)
         
         for var_name, unit, standard_name, cell_method, long_description, display_name in stn_vars:
-            s = s + '''%s:
-  name: "%s"
-  display_name: "%s"
-  long_name: "%s"
-  standard_name: "%s"
-  units: "%s"
-  cell_method: "%s"
-  col: "%s"
+            s = s + '''%(var_name)s:
+  name: "%(var_name)s"
+  display_name: "%(display_name)s"
+  long_name: "%(long_description)s"
+  standard_name: "%(standard_name)s"
+  units: "%(unit)s"
+  cell_method: "%(cell_method)s"
+  col: "%(var_name)s"
   axis: "Y"
   missing_value: -9999
 
-''' %(var_name, var_name, display_name, long_description, standard_name, unit, cell_method, var_name)
+''' % locals()
 
         return StringIO(s)
 
