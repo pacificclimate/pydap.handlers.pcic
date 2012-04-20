@@ -37,7 +37,7 @@ class PcicSqlHandler(SqlHandler):
         except TypeError:
             native_id, station_name, network = (station_id, '', '')
 
-        dsn = "postgresql://%(user)s:'%(password)s'@%(host)s/%(database)s" % conn_params
+        dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % conn_params
         s = '''database:
   dsn: "%(dsn)s"
   id: "obs_time"
@@ -99,6 +99,7 @@ time:
 
 class RawPcicSqlHandler(PcicSqlHandler):
     extensions = re.compile(r"^.*\.rsql$", re.IGNORECASE)
+    virtual = True
 
     def get_full_query(self, stn_id, cur):
         query_string = "SELECT query_one_station(%s)" % stn_id
@@ -113,6 +114,7 @@ class RawPcicSqlHandler(PcicSqlHandler):
 
 class ClimoPcicSqlHandler(PcicSqlHandler):
     extensions = re.compile(r"^.*\.csql$", re.IGNORECASE)
+    virtual = True
 
     def get_full_query(self, stn_id, cur):
         query_string = "SELECT query_one_station_climo(%s)" % stn_id
