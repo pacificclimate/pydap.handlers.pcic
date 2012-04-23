@@ -1,4 +1,4 @@
-import os
+import os, sys
 import re
 from StringIO import StringIO
 import psycopg2
