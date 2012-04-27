@@ -65,7 +65,7 @@ time:
   axis: "T"
   col: "obs_time"
   long_name: "observation time"
-  type: "String"
+  type: String
 
 ''' % locals()
 
@@ -82,6 +82,7 @@ time:
   col: "%(var_name)s"
   axis: "Y"
   missing_value: -9999
+  type: Float64
 
 ''' % locals()
 
