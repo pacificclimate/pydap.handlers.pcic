@@ -89,7 +89,7 @@ time:
         return StringIO(s)
 
     def parse_constraints(self, environ):
-        self.filepath = self.create_ini(environ)
+        self.config_lines = self.create_ini(environ).getvalue().splitlines(True)
         return SqlHandler.parse_constraints(self, environ)
 
     def get_full_query(self, stn_id, cur):
