@@ -1,9 +1,9 @@
 import os, sys
 import re
 from StringIO import StringIO
-import psycopg2
+from sqlalchemy import create_engine
 
-from pydap.handlers.sql import Handler as SqlHandler
+from pydap.handlers.sql import Handler as SqlHandler, DBPOOL, DBLOCK
 from pdb import set_trace
 
 class PcicSqlHandler(SqlHandler):
@@ -12,8 +12,12 @@ class PcicSqlHandler(SqlHandler):
 
     @staticmethod
     def getcur(params):
-        con = psycopg2.connect(**params)
-        return con.cursor()
+        dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % params
+        with DBLOCK:
+            if dsn not in DBPOOL:
+                DBPOOL[dsn] = create_engine(dsn)
+
+        return DBPOOL[dsn]
 
     def create_ini(self, environ):
         # This will be something like .../[network_name]/[native_id].rsql
@@ -25,15 +29,14 @@ class PcicSqlHandler(SqlHandler):
         net_name, native_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
 
         q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (native_id, net_name)
-        cur.execute(q)
-        station_id = cur.fetchone()[0]
+        station_id = cur.execute(q).first()[0]
 
         full_query = self.get_full_query(station_id, cur)
 
         get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % station_id
-        cur.execute(get_stn_query)
+        rv = cur.execute(get_stn_query).first()
         try:
-            native_id, station_name, network = cur.fetchone()
+            native_id, station_name, network = rv
         except TypeError:
             native_id, station_name, network = (station_id, '', '')
 
@@ -86,7 +89,7 @@ time:
 
 ''' % locals()
 
-        return StringIO(s)
+        return StringIO(str(s))
 
     def parse_constraints(self, environ):
         self.config_lines = self.create_ini(environ).getvalue().splitlines(True)
@@ -104,13 +107,11 @@ class RawPcicSqlHandler(PcicSqlHandler):
 
     def get_full_query(self, stn_id, cur):
         query_string = "SELECT query_one_station(%s)" % stn_id
-        cur.execute(query_string)
-        return cur.fetchone()[0]
+        return cur.execute(query_string).fetchone()[0]
 
     def get_vars(self, stn_id, cur):
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
-        cur.execute(get_var_query)
-        return cur.fetchall()
+        return cur.execute(get_var_query).fetchall()
 
 
 class ClimoPcicSqlHandler(PcicSqlHandler):
@@ -119,13 +120,11 @@ class ClimoPcicSqlHandler(PcicSqlHandler):
 
     def get_full_query(self, stn_id, cur):
         query_string = "SELECT query_one_station_climo(%s)" % stn_id
-        cur.execute(query_string)
-        return cur.fetchone()[0]
+        return cur.execute(query_string).first()[0]
 
     def get_vars(self, stn_id, cur):
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
-        cur.execute(get_var_query)
-        return cur.fetchall()
+        return cur.execute(get_var_query).fetchall()
 
 if __name__ == '__main__':
 
