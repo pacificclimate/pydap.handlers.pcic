@@ -56,8 +56,8 @@ dataset:
     station_id: "%(native_id)s"
     station_name: "%(station_name)s"
     network: "%(network)s"
-    latitude: !Query \'SELECT y(the_geom) FROM meta_history WHERE station_id = %(station_id)d\'
-    longitude: !Query \'SELECT x(the_geom) FROM meta_history WHERE station_id = %(station_id)d\'
+    latitude: !Query \'SELECT st_y(the_geom) FROM meta_history WHERE station_id = %(station_id)d\'
+    longitude: !Query \'SELECT st_x(the_geom) FROM meta_history WHERE station_id = %(station_id)d\'
     history: "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database"
 
 sequence:
