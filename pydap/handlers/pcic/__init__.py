@@ -2,6 +2,7 @@ import os, sys
 import re
 from StringIO import StringIO
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from pydap.handlers.sql import Handler as SqlHandler, DBPOOL, DBLOCK
 from pdb import set_trace
@@ -11,11 +12,11 @@ class PcicSqlHandler(SqlHandler):
     extensions = re.compile(r"^.*\.psql$", re.IGNORECASE)
 
     @staticmethod
-    def getcur(params):
+    def getsesh(params):
         dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % params
         with DBLOCK:
             if dsn not in DBPOOL:
-                DBPOOL[dsn] = create_engine(dsn)
+                DBPOOL[dsn] = sessionmaker(bind=create_engine(dsn))()
 
         return DBPOOL[dsn]
 
@@ -24,21 +25,15 @@ class PcicSqlHandler(SqlHandler):
         # The database station_id is looked up from that
         filepath = self.filepath
         conn_params = eval(environ.get('pydap.handlers.pcic.conn_params'))
-        cur = self.getcur(conn_params)
+        sesh = self.getsesh(conn_params)
 
         net_name, native_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
 
-        q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (native_id, net_name)
-        station_id = cur.execute(q).first()[0]
+        station_id = sesh.query(Station.id).filter(Station.native_id==native_id).filter(Network.name==net_name).first()
 
-        full_query = self.get_full_query(station_id, cur)
+        full_query = self.get_full_query(station_id, sesh)
 
-        get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % station_id
-        rv = cur.execute(get_stn_query).first()
-        try:
-            native_id, station_name, network = rv
-        except TypeError:
-            native_id, station_name, network = (station_id, '', '')
+        native_id, station_name, network = sesh.query(Station.native_id, Station.name, Network.name).filter(Station.id == station_id)
 
         dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % conn_params
         s = '''database:
@@ -122,7 +117,8 @@ class ClimoPcicSqlHandler(PcicSqlHandler):
         query_string = "SELECT query_one_station_climo(%s)" % stn_id
         return cur.execute(query_string).first()[0]
 
-    def get_vars(self, stn_id, cur):
+    def get_vars(self, stn_id, sesh):
+        sesh.query(Variable.name, Variable.unit, Variable.standard_name, Variable.cell_method, Variable.long_description, Variable.display_name).filter().filter()all()
         get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
         return cur.execute(get_var_query).fetchall()
 

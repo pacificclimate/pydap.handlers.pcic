@@ -17,7 +17,7 @@ setup(
                     rsql = pydap.handlers.pcic:RawPcicSqlHandler
                     csql = pydap.handlers.pcic:ClimoPcicSqlHandler
                  ''',
-    install_requires=['pydap.handlers.sql'],
+    install_requires=['pydap.handlers.sql', 'PyCDS'],
     zip_safe=True,
         classifiers='''Development Status :: 2 - Pre-Alpha
 Environment :: Console
