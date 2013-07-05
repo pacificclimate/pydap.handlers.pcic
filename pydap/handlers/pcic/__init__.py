@@ -10,7 +10,7 @@ Each dataset will contain a variety of global attributes such as the station and
 import os, sys
 import re
 from StringIO import StringIO
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, or_, not_
 
 from pydap.handlers.sql import Handler as SqlHandler, DBPOOL, DBLOCK
 from pdb import set_trace
@@ -21,34 +21,36 @@ class PcicSqlHandler(SqlHandler):
     extensions = re.compile(r"^.*\.psql$", re.IGNORECASE)
 
     @staticmethod
-    def getcur(params):
+    def get_sesh(dsn):
         '''Gets a database engine to be used for queries. Either uses the engine stored at the module leve in :mod:`pydap.handlers.sql`, if available, or creates it, if not.
 
            :param params: dict containing the parameters to an :mod:`sqlalchemy` DSN, in particular `user`, `password`, `host`, and `database`
            :type params: dict
            :rtype: sqlalchemy.Engine
         '''
-        dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % params
+        #dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % params
         with DBLOCK:
             if dsn not in DBPOOL:
                 DBPOOL[dsn] = create_engine(dsn)
 
-        return DBPOOL[dsn]
+        Session = sessionmaker(bind=DBPOOL[dsn])
+        return Session()
 
     def create_ini(self, environ):
         '''Creates the actual text of a pydap SQL handler config file and returns it as a StringIO. `self.filepath` should be set before this is called. It will typically be something like ``.../[network_name]/[native_id].rsql``. The database station_id is looked up from that.
         
-           :param environ: WSGI environment which *must* contain a connection params dict under the key pydap.handlers.pcic.conn_params
+           :param environ: WSGI environment which *must* contain a connection params dict under the key pydap.handlers.pcic.dsn
            :rtype: StringIO.StringIO
         '''
         filepath = self.filepath
-        conn_params = eval(environ.get('pydap.handlers.pcic.conn_params'))
-        cur = self.getcur(conn_params)
+        dsn = environ.get('pydap.handlers.pcic.dsn')
+        sesh = self.get_sesh(dsn)
 
         net_name, native_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
 
-        q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (native_id, net_name)
-        station_id = cur.execute(q).first()[0]
+        q = sesh.query(Station.id).join(Network).filter(Station.native_id == native_id).filter(Network.name == net_name)
+        #q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (native_id, net_name)
+        station_id = sesh.execute(q).first()[0]
 
         full_query = self.get_full_query(station_id, cur)
 
@@ -59,7 +61,7 @@ class PcicSqlHandler(SqlHandler):
         except TypeError:
             native_id, station_name, network = (station_id, '', '')
 
-        dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % conn_params
+            #dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % conn_params
         s = '''database:
   dsn: "%(dsn)s"
   id: "obs_time"
@@ -126,21 +128,22 @@ class RawPcicSqlHandler(PcicSqlHandler):
     extensions = re.compile(r"^.*\.rsql$", re.IGNORECASE)
     virtual = True
 
-    def get_full_query(self, stn_id, cur):
+    def get_full_query(self, stn_id, sesh):
         '''Sends a special query to the database that actually retrieves generated SQL for constructing an observation table (time by variable) for a single station. Uses the ``query_one_station`` stored procedure.
 
            :param stn_id: the *database* station_id of the desired station
            :type stn_id: int or str
+           :param sesh: an sqlalchemy session
         '''
         query_string = "SELECT query_one_station(%s)" % stn_id
-        return cur.execute(query_string).fetchone()[0]
+        return sesh.execute(query_string).fetchone()[0]
 
-    def get_vars(self, stn_id, cur):
+    def get_vars(self, stn_id, sesh):
         '''Makes a database query to retrieve all of the raw variables for a particular station
         '''
-        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
-        return cur.execute(get_var_query).fetchall()
-
+        q = sesh.query(Variable).join(VarsPerHistory).join(History).join(Network).filter(Station.id == stn_id).filter(!(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%')))
+        #get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
+        return [ x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name for x in cur.execute(q) ]
 
 class ClimoPcicSqlHandler(PcicSqlHandler):
     '''Subclass of PcicSqlHandler which handles the climatological observations
@@ -148,20 +151,23 @@ class ClimoPcicSqlHandler(PcicSqlHandler):
     extensions = re.compile(r"^.*\.csql$", re.IGNORECASE)
     virtual = True
 
-    def get_full_query(self, stn_id, cur):
+    def get_full_query(self, stn_id, sesh):
         '''Sends a special query to the database that actually retrieves generated SQL for constructing an observation table (time by variable) for a single station. Uses the ``query_one_station`` stored procedure.
 
            :param stn_id: the *database* station_id of the desired station
            :type stn_id: int or str
+           :param sesh: sqlalchemy session
         '''
         query_string = "SELECT query_one_station_climo(%s)" % stn_id
-        return cur.execute(query_string).first()[0]
+        return sesh.execute(query_string).first()[0]
 
-    def get_vars(self, stn_id, cur):
+    def get_vars(self, stn_id, sesh):
         '''Makes a database query to retrieve all of the climatological variables for a particular station
         '''
-        get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
-        return cur.execute(get_var_query).fetchall()
+        q = sesh.query(Variable).join(VarsPerHistory).join(History).join(Network).filter(Station.id == stn_id).filter(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%')))
+        #get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
+        return [ x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name for x in cur.execute(q) ]
+        #return cur.execute(get_var_query).fetchall()
 
 if __name__ == '__main__':
 
