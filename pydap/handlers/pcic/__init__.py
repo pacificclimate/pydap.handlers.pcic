@@ -52,7 +52,7 @@ class PcicSqlHandler(SqlHandler):
         #q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (native_id, net_name)
         station_id = sesh.execute(q).first()[0]
 
-        full_query = self.get_full_query(station_id, cur)
+        full_query = self.get_full_query(station_id, sesh)
 
         get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % station_id
         rv = cur.execute(get_stn_query).first()
@@ -93,7 +93,7 @@ time:
 
 ''' % locals()
 
-        stn_vars = self.get_vars(station_id, cur)
+        stn_vars = self.get_vars(station_id, sesh)
         
         for var_name, unit, standard_name, cell_method, long_description, display_name in stn_vars:
             s = s + '''%(var_name)s:
@@ -116,10 +116,10 @@ time:
         self.config_lines = self.create_ini(environ).getvalue().splitlines(True)
         return SqlHandler.parse_constraints(self, environ)
 
-    def get_full_query(self, stn_id, cur):
+    def get_full_query(self, stn_id, sesh):
         raise NotImplementedError
 
-    def get_vars(self, stn_id, cur):
+    def get_vars(self, stn_id, sesh):
         raise NotImplementedError
 
 class RawPcicSqlHandler(PcicSqlHandler):
@@ -141,9 +141,9 @@ class RawPcicSqlHandler(PcicSqlHandler):
     def get_vars(self, stn_id, sesh):
         '''Makes a database query to retrieve all of the raw variables for a particular station
         '''
-        q = sesh.query(Variable).join(VarsPerHistory).join(History).join(Network).filter(Station.id == stn_id).filter(!(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%')))
+        q = sesh.query(Variable).join(VarsPerHistory).join(History).join(Network).filter(Station.id == stn_id).filter(not_(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%'))))
         #get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
-        return [ x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name for x in cur.execute(q) ]
+        return [ (x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name) for x in sesh.execute(q) ]
 
 class ClimoPcicSqlHandler(PcicSqlHandler):
     '''Subclass of PcicSqlHandler which handles the climatological observations
@@ -166,7 +166,7 @@ class ClimoPcicSqlHandler(PcicSqlHandler):
         '''
         q = sesh.query(Variable).join(VarsPerHistory).join(History).join(Network).filter(Station.id == stn_id).filter(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%')))
         #get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
-        return [ x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name for x in cur.execute(q) ]
+        return [ (x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name) for x in sesh.execute(q) ]
         #return cur.execute(get_var_query).fetchall()
 
 if __name__ == '__main__':
