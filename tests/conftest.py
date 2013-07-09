@@ -1,11 +1,15 @@
 import pytest
 import pycds
-import pcic
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 @pytest.fixture(scope="module")
 def test_session():
-    sesh = pcic.get_session('sqlite+pysqlite:///{0}'.format(pycds.test_dsn))()
-    return sesh
+    engine = create_engine('sqlite+pysqlite:///{0}'.format(pycds.test_dsn))
+    engine.echo = True
+    Session = sessionmaker(bind=engine)
+    return Session()
 
 @pytest.fixture(scope="module")
 def conn_params():

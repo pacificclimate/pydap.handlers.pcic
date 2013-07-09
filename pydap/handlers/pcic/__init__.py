@@ -12,6 +12,7 @@ import re
 from StringIO import StringIO
 from sqlalchemy import create_engine, or_, not_
 
+from pycds import *
 from pydap.handlers.sql import Handler as SqlHandler, DBPOOL, DBLOCK
 from pdb import set_trace
 
@@ -28,7 +29,6 @@ class PcicSqlHandler(SqlHandler):
            :type params: dict
            :rtype: sqlalchemy.Engine
         '''
-        #dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % params
         with DBLOCK:
             if dsn not in DBPOOL:
                 DBPOOL[dsn] = create_engine(dsn)
@@ -39,7 +39,7 @@ class PcicSqlHandler(SqlHandler):
     def create_ini(self, environ):
         '''Creates the actual text of a pydap SQL handler config file and returns it as a StringIO. `self.filepath` should be set before this is called. It will typically be something like ``.../[network_name]/[native_id].rsql``. The database station_id is looked up from that.
         
-           :param environ: WSGI environment which *must* contain a connection params dict under the key pydap.handlers.pcic.dsn
+           :param environ: WSGI environment which *must* contain a dsn string under the key pydap.handlers.pcic.dsn
            :rtype: StringIO.StringIO
         '''
         filepath = self.filepath
@@ -49,19 +49,18 @@ class PcicSqlHandler(SqlHandler):
         net_name, native_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
 
         q = sesh.query(Station.id).join(Network).filter(Station.native_id == native_id).filter(Network.name == net_name)
-        #q = "SELECT station_id FROM meta_station NATURAL JOIN meta_network WHERE native_id = '%s' AND network_name = '%s'" % (native_id, net_name)
         station_id = sesh.execute(q).first()[0]
 
         full_query = self.get_full_query(station_id, sesh)
 
         get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % station_id
-        rv = cur.execute(get_stn_query).first()
+        q = sesh.query(Station.native_id, Station.name, Network.name).filter(Station.id == station_id)
+        rv = q.first()
         try:
             native_id, station_name, network = rv
         except TypeError:
             native_id, station_name, network = (station_id, '', '')
 
-            #dsn = "postgresql://%(user)s:%(password)s@%(host)s/%(database)s" % conn_params
         s = '''database:
   dsn: "%(dsn)s"
   id: "obs_time"
@@ -141,9 +140,10 @@ class RawPcicSqlHandler(PcicSqlHandler):
     def get_vars(self, stn_id, sesh):
         '''Makes a database query to retrieve all of the raw variables for a particular station
         '''
-        q = sesh.query(Variable).join(VarsPerHistory).join(History).join(Network).filter(Station.id == stn_id).filter(not_(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%'))))
-        #get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method !~ '(within|over)'" % stn_id
-        return [ (x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name) for x in sesh.execute(q) ]
+        q = sesh.query(Variable)\
+          .join(VarsPerHistory).join(History).join(Station).join(Network)\
+          .filter(Station.id == stn_id).filter(not_(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%'))))
+        return [ (x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name) for x in q.all() ]
 
 class ClimoPcicSqlHandler(PcicSqlHandler):
     '''Subclass of PcicSqlHandler which handles the climatological observations
@@ -164,10 +164,11 @@ class ClimoPcicSqlHandler(PcicSqlHandler):
     def get_vars(self, stn_id, sesh):
         '''Makes a database query to retrieve all of the climatological variables for a particular station
         '''
-        q = sesh.query(Variable).join(VarsPerHistory).join(History).join(Network).filter(Station.id == stn_id).filter(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%')))
-        #get_var_query = "SELECT net_var_name, unit, standard_name, cell_method, long_description, display_name FROM meta_network NATURAL JOIN meta_history NATURAL JOIN vars_per_history_mv NATURAL JOIN meta_vars WHERE station_id = %s AND cell_method ~ '(within|over)'" % stn_id
-        return [ (x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name) for x in sesh.execute(q) ]
-        #return cur.execute(get_var_query).fetchall()
+        q = sesh.query(Variable)\
+          .join(Network).join(Station).join(History).join(VarsPerHistory)\
+          .filter(Station.id == stn_id).filter(or_(Variable.cell_method.like('%within%'), Variable.cell_method.like('%over%')))
+
+        return [ (x.name, x.unit, x.standard_name, x.cell_method, x.description, x.display_name) for x in q.all() ]
 
 if __name__ == '__main__':
 
