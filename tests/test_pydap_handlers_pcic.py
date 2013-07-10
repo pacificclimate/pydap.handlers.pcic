@@ -139,3 +139,28 @@ def test_climo(test_session):
                                                                                   
 def test_get_vars(test_session, input, expected):
     assert set(input.get_vars(6594, test_session)) == set(expected)
+
+@pytest.mark.parametrize(('net_name', 'native_id', 'expected'), [
+                         ('EC','1106200',
+                          ['station_id: "1106200"',
+                           'station_name: "Point Atkinson"',
+                           'network: "EC_raw"',
+                           'standard_name: "lwe_thickness_of_precipitation_amount"'
+                           ]
+                          ),
+                         ('ARDA','109147',
+                          ['station_id: "109147"',
+                           'station_name: "AIRPORT"',
+                           'network: "ARDA"',
+                           'standard_name: "surface_snow_thickness"'
+                           ]
+                         )])
+    
+def test_create_ini(conn_params, net_name, native_id, expected):
+    x = PcicSqlHandler(conn_params)
+    s = x.create_ini(net_name, native_id)
+
+    for substr in expected:
+        print substr
+        assert substr in s
+
