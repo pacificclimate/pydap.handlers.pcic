@@ -10,10 +10,12 @@ Each dataset will contain a variety of global attributes such as the station and
 import os, sys
 import re
 from tempfile import NamedTemporaryFile
-from sqlalchemy import create_engine, or_, not_
+from sqlalchemy import or_, not_
+from sqlalchemy.orm import sessionmaker
 
 from pycds import *
 from pydap.handlers.sql import SQLHandler, Engines
+
 from pdb import set_trace
 
 class PcicSqlHandler(object):
@@ -38,9 +40,10 @@ class PcicSqlHandler(object):
 
            :param params: dict containing the parameters to an :mod:`sqlalchemy` DSN, in particular `user`, `password`, `host`, and `database`
            :type params: dict
-           :rtype: sqlalchemy.Engine
+           :rtype: sqlalchemy.Session
         '''
-        return Engines[self.dsn]
+        Session = sessionmaker(bind=Engines[self.dsn])
+        return Session()
 
     def create_ini(self, net_name, native_id):
         '''Creates the actual text of a pydap SQL handler config file and returns it as a StringIO. `self.filepath` should be set before this is called. It will typically be something like ``.../[network_name]/[native_id].rsql``. The database station_id is looked up from that.
@@ -55,14 +58,14 @@ class PcicSqlHandler(object):
 
         full_query = self.get_full_query(station_id, sesh)
 
-        get_stn_query = "SELECT native_id, station_name, network_name FROM meta_history NATURAL JOIN meta_station NATURAL JOIN meta_network WHERE station_id = %s" % station_id
-        q = sesh.query(Station.native_id, Station.name, Network.name).filter(Station.id == station_id)
+        q = sesh.query(Station.native_id, History.station_name, Network.name).join(History).join(Network).filter(Station.id == station_id)
         rv = q.first()
         try:
             native_id, station_name, network = rv
         except TypeError:
             native_id, station_name, network = (station_id, '', '')
 
+        dsn = self.dsn
         s = '''database:
   dsn: "%(dsn)s"
   id: "obs_time"
