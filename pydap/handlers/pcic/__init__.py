@@ -9,44 +9,46 @@ Each dataset will contain a variety of global attributes such as the station and
 
 import os, sys
 import re
-from StringIO import StringIO
+from tempfile import NamedTemporaryFile
 from sqlalchemy import create_engine, or_, not_
 
 from pycds import *
-from pydap.handlers.sql import Handler as SqlHandler, DBPOOL, DBLOCK
+from pydap.handlers.sql import SQLHandler, Engines
 from pdb import set_trace
 
-class PcicSqlHandler(SqlHandler):
+class PcicSqlHandler(object):
     '''A Pydap handler which reads in-situ observations from the BC Provincial Climate Data Set.
     '''
     extensions = re.compile(r"^.*\.psql$", re.IGNORECASE)
 
-    @staticmethod
-    def get_sesh(dsn):
+    def __init__(self, dsn):
+        self.dsn = dsn
+
+    def __call__(self, environ, start_response):
+        filepath = environ.get('SCRIPT_NAME')
+        net_name, native_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
+        with NamedTempraryFile('w', suffix='.yaml') as f:
+            s = self.create_ini(net_name, native_id)
+            f.write(s)
+            handler = SQLHandler(f.name)
+        return handler(environ, start_response)
+
+    def get_sesh(self):
         '''Gets a database engine to be used for queries. Either uses the engine stored at the module leve in :mod:`pydap.handlers.sql`, if available, or creates it, if not.
 
            :param params: dict containing the parameters to an :mod:`sqlalchemy` DSN, in particular `user`, `password`, `host`, and `database`
            :type params: dict
            :rtype: sqlalchemy.Engine
         '''
-        with DBLOCK:
-            if dsn not in DBPOOL:
-                DBPOOL[dsn] = create_engine(dsn)
+        return Engines[self.dsn]
 
-        Session = sessionmaker(bind=DBPOOL[dsn])
-        return Session()
-
-    def create_ini(self, environ):
+    def create_ini(self, net_name, native_id):
         '''Creates the actual text of a pydap SQL handler config file and returns it as a StringIO. `self.filepath` should be set before this is called. It will typically be something like ``.../[network_name]/[native_id].rsql``. The database station_id is looked up from that.
         
            :param environ: WSGI environment which *must* contain a dsn string under the key pydap.handlers.pcic.dsn
            :rtype: StringIO.StringIO
         '''
-        filepath = self.filepath
-        dsn = environ.get('pydap.handlers.pcic.dsn')
-        sesh = self.get_sesh(dsn)
-
-        net_name, native_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
+        sesh = self.get_sesh()
 
         q = sesh.query(Station.id).join(Network).filter(Station.native_id == native_id).filter(Network.name == net_name)
         station_id = sesh.execute(q).first()[0]
@@ -109,11 +111,7 @@ time:
 
 ''' % locals()
 
-        return StringIO(str(s))
-
-    def parse_constraints(self, environ):
-        self.config_lines = self.create_ini(environ).getvalue().splitlines(True)
-        return SqlHandler.parse_constraints(self, environ)
+        return str(s)
 
     def get_full_query(self, stn_id, sesh):
         raise NotImplementedError
