@@ -1,5 +1,10 @@
 import pytest
+from sqlalchemy import not_, and_, select, distinct
+from sqlalchemy.sql.expression import alias
+from webob.request import Request
 
+from pycds import Variable, Network, Station, ObsWithFlags
+from pycds.util import sql_station_table
 from pydap.handlers.pcic import PcicSqlHandler, RawPcicSqlHandler, ClimoPcicSqlHandler
 
 def test_composite(test_session):
@@ -140,9 +145,6 @@ def test_climo(test_session):
 def test_get_vars(test_session, input, expected):
     assert set(input.get_vars(6594, test_session)) == set(expected)
 
-def raw_query(*args):
-    return '''SELECT * FROM(SELECT obs_time, datum AS air_temperature, flag_name as air_temperature_flag FROM obs_with_flags WHERE vars_id = 542 AND station_id = 6628) AS a FULL OUTER JOIN (SELECT obs_time, datum AS wind_gust_speed, flag_name as wind_gust_speed_flag FROM obs_with_flags WHERE vars_id = 543 AND station_id = 6628) AS aa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS air_temperature_yesterday_low, flag_name as air_temperature_yesterday_low_flag FROM obs_with_flags WHERE vars_id = 545 AND station_id = 6628) AS aaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS air_temperature_yesterday_high, flag_name as air_temperature_yesterday_high_flag FROM obs_with_flags WHERE vars_id = 544 AND station_id = 6628) AS aaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS dew_point, flag_name as dew_point_flag FROM obs_with_flags WHERE vars_id = 551 AND station_id = 6628) AS aaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS wind_speed, flag_name as wind_speed_flag FROM obs_with_flags WHERE vars_id = 550 AND station_id = 6628) AS aaaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS snow_amount, flag_name as snow_amount_flag FROM obs_with_flags WHERE vars_id = 548 AND station_id = 6628) AS aaaaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS mean_sea_level, flag_name as mean_sea_level_flag FROM obs_with_flags WHERE vars_id = 549 AND station_id = 6628) AS aaaaaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS relative_humidity, flag_name as relative_humidity_flag FROM obs_with_flags WHERE vars_id = 552 AND station_id = 6628) AS aaaaaaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS total_rain, flag_name as total_rain_flag FROM obs_with_flags WHERE vars_id = 547 AND station_id = 6628) AS aaaaaaaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS tendency_amount, flag_name as tendency_amount_flag FROM obs_with_flags WHERE vars_id = 555 AND station_id = 6628) AS aaaaaaaaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS wind_direction, flag_name as wind_direction_flag FROM obs_with_flags WHERE vars_id = 553 AND station_id = 6628) AS aaaaaaaaaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS total_cloud_cover, flag_name as total_cloud_cover_flag FROM obs_with_flags WHERE vars_id = 554 AND station_id = 6628) AS aaaaaaaaaaaaa USING (obs_time) FULL OUTER JOIN (SELECT obs_time, datum AS total_precipitation, flag_name as total_precipitation_flag FROM obs_with_flags WHERE vars_id = 546 AND station_id = 6628) AS aaaaaaaaaaaaaa USING (obs_time)'''
-
 @pytest.mark.parametrize(('net_name', 'native_id', 'expected'), [
                          ('EC_raw','1106200',
                           ['station_id: "1106200"',
@@ -168,3 +170,38 @@ def test_create_ini(conn_params, net_name, native_id, expected, monkeypatch):
         print substr
         assert substr in s
 
+def test_monkey(test_session, conn_params, monkeypatch):
+    x = RawPcicSqlHandler(conn_params)
+
+    def my_get_full_query(self, stn_id, sesh):
+        return sql_station_table(sesh, stn_id)
+    
+    monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
+    
+    s = x.get_full_query(913, test_session)
+    rv = test_session.execute(s)
+
+@pytest.mark.parametrize('url', [
+    '/EC/913/junk', # unparseable path
+    '/EC/913.sql.html' # non-existant station
+    ])
+def test_404s(conn_params, url):
+    x = RawPcicSqlHandler(conn_params)
+    env = {'SCRIPT_NAME': url}
+    req = Request(env)
+    resp = req.get_response(x)
+
+    assert '404' in resp.status
+    
+def test_returns_content(conn_params, monkeypatch):
+    x = RawPcicSqlHandler(conn_params)
+
+    def my_get_full_query(self, stn_id, sesh):
+        return sql_station_table(sesh, stn_id)
+    
+    monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
+
+    env = {'SCRIPT_NAME': '/EC/1106200.sql.html'}
+    req = Request(env)
+    resp = req.get_response(x)
+    

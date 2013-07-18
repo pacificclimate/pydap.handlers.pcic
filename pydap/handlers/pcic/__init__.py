@@ -10,8 +10,10 @@ Each dataset will contain a variety of global attributes such as the station and
 import os, sys
 import re
 from tempfile import NamedTemporaryFile
+
 from sqlalchemy import or_, not_
 from sqlalchemy.orm import sessionmaker
+from paste.httpexceptions import HTTPNotFound
 
 from pycds import *
 from pydap.handlers.sql import SQLHandler, Engines
@@ -27,13 +29,26 @@ class PcicSqlHandler(object):
         self.dsn = dsn
 
     def __call__(self, environ, start_response):
+        ''':param environ: WSGI environment such that SCRIPT_NAME is set to something that matches the pattern /[network_name]/[native_id].sql.[response]
+        '''
         filepath = environ.get('SCRIPT_NAME')
-        net_name, native_id = re.search(r"/([^/]+)/([^/]+)\..sql", filepath).groups()
-        with NamedTempraryFile('w', suffix='.yaml') as f:
+        match = re.search(r"/([a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)\.sql", filepath)
+        if not match:
+            return HTTPNotFound("Could not make sense of path {0}{1}".format(environ.get('PATH_INFO', ''), environ.get('SCRIPT_NAME', '')))(environ, start_response)
+
+        net_name, native_id = match.groups()
+
+        try:
             s = self.create_ini(net_name, native_id)
-            f.write(s)
-            handler = SQLHandler(f.name)
-        return handler(environ, start_response)
+        except ValueError, e:
+            return HTTPNotFound(e.message)(environ, start_response) # 404  
+        f = NamedTemporaryFile('w', suffix='.yaml', delete=False)
+        f.write(s)
+        f.close()
+        handler = SQLHandler(f.name)
+        response = handler(environ, start_response)
+        os.remove(f.name)
+        return response
 
     def get_sesh(self):
         '''Gets a database engine to be used for queries. Either uses the engine stored at the module leve in :mod:`pydap.handlers.sql`, if available, or creates it, if not.
@@ -54,7 +69,9 @@ class PcicSqlHandler(object):
         sesh = self.get_sesh()
 
         q = sesh.query(Station.id).join(Network).filter(Station.native_id == native_id).filter(Network.name == net_name)
-        station_id = sesh.execute(q).first()[0]
+        if not q.first():
+            raise ValueError("No such station {net_name}/{native_id}".format(**locals()))
+        station_id, = q.first()
 
         full_query = self.get_full_query(station_id, sesh)
 
@@ -66,6 +83,7 @@ class PcicSqlHandler(object):
             native_id, station_name, network = (station_id, '', '')
 
         dsn = self.dsn
+        full_query = full_query.replace('"', '\\"')
         s = '''database:
   dsn: "%(dsn)s"
   id: "obs_time"
