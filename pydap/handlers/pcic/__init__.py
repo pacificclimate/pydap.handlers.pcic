@@ -14,6 +14,7 @@ from tempfile import NamedTemporaryFile
 from sqlalchemy import or_, not_
 from sqlalchemy.orm import sessionmaker
 from paste.httpexceptions import HTTPNotFound
+from pydap.wsgi.app import DapServer
 
 from pycds import *
 from pydap.handlers.sql import SQLHandler, Engines
@@ -29,9 +30,10 @@ class PcicSqlHandler(object):
         self.dsn = dsn
 
     def __call__(self, environ, start_response):
-        ''':param environ: WSGI environment such that SCRIPT_NAME is set to something that matches the pattern /[network_name]/[native_id].sql.[response]
+        ''':param environ: WSGI environment such that PATH_INFO is set to something that matches the pattern /[network_name]/[native_id].sql.[response]
+           :rtype: iterable WSGI response
         '''
-        filepath = environ.get('SCRIPT_NAME')
+        filepath = environ.get('PATH_INFO')
         match = re.search(r"/([a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)\.sql", filepath)
         if not match:
             return HTTPNotFound("Could not make sense of path {0}{1}".format(environ.get('PATH_INFO', ''), environ.get('SCRIPT_NAME', '')))(environ, start_response)
@@ -42,11 +44,20 @@ class PcicSqlHandler(object):
             s = self.create_ini(net_name, native_id)
         except ValueError, e:
             return HTTPNotFound(e.message)(environ, start_response) # 404  
-        f = NamedTemporaryFile('w', suffix='.yaml', delete=False)
+        f = NamedTemporaryFile('w', suffix='.sql', delete=False)
         f.write(s)
         f.close()
-        handler = SQLHandler(f.name)
-        response = handler(environ, start_response)
+
+        # Create our own instance of pydap to response to this request *sigh*
+        class MyDapServer(DapServer):
+            def __init__(self, *args, **kwargs):
+                pass
+            @property
+            def config(self):
+                return {'handlers': [{'url': filepath.rsplit('.', 1)[0], 'file': f.name}]}
+        
+        app = MyDapServer()
+        response = app(environ, start_response)
         os.remove(f.name)
         return response
 

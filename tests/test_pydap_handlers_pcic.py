@@ -1,9 +1,6 @@
 import pytest
-from sqlalchemy import not_, and_, select, distinct
-from sqlalchemy.sql.expression import alias
 from webob.request import Request
 
-from pycds import Variable, Network, Station, ObsWithFlags
 from pycds.util import sql_station_table
 from pydap.handlers.pcic import PcicSqlHandler, RawPcicSqlHandler, ClimoPcicSqlHandler
 
@@ -157,7 +154,7 @@ def test_get_vars(test_session, input, expected):
                           ['station_id: "109147"',
                            'station_name: "AIRPORT"',
                            'network: "ARDA"',
-                           'standard_name: "surface_snow_thickness"'
+                           'standard_name: "lwe_thickness_of_precipitation"'
                            ]
                          )])
 def test_create_ini(conn_params, net_name, native_id, expected, monkeypatch):
@@ -187,13 +184,15 @@ def test_monkey(test_session, conn_params, monkeypatch):
     ])
 def test_404s(conn_params, url):
     x = RawPcicSqlHandler(conn_params)
-    env = {'SCRIPT_NAME': url}
-    req = Request(env)
+    req = Request.blank(url)
     resp = req.get_response(x)
 
     assert '404' in resp.status
-    
+
 def test_returns_content(conn_params, monkeypatch):
+    '''This is not a good 'unit' test in that it relies on some intergration with Pydap
+       Unfortunately this is the case... this whole _package_ relies heavily on Pydap!
+    '''
     x = RawPcicSqlHandler(conn_params)
 
     def my_get_full_query(self, stn_id, sesh):
@@ -201,7 +200,12 @@ def test_returns_content(conn_params, monkeypatch):
     
     monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
 
-    env = {'SCRIPT_NAME': '/EC/1106200.sql.html'}
-    req = Request(env)
+    url = '/EC/1106200.sql.das'
+    req = Request.blank(url)
     resp = req.get_response(x)
-    
+    assert resp.status == '200 OK'
+
+    assert '''        MAX_TEMP {
+            String display_name "Temperature (Max.)";
+            String name "MAX_TEMP";
+            String cell_method "time: maximum";''' in resp.body
