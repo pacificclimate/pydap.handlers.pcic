@@ -34,7 +34,7 @@ class PcicSqlHandler(object):
            :rtype: iterable WSGI response
         '''
         filepath = environ.get('PATH_INFO')
-        match = re.search(r"/([a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)\.sql", filepath)
+        match = re.search(r"/([a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)\..sql", filepath)
         if not match:
             return HTTPNotFound("Could not make sense of path {0}{1}".format(environ.get('PATH_INFO', ''), environ.get('SCRIPT_NAME', '')))(environ, start_response)
 
@@ -44,19 +44,11 @@ class PcicSqlHandler(object):
             s = self.create_ini(net_name, native_id)
         except ValueError, e:
             return HTTPNotFound(e.message)(environ, start_response) # 404  
-        f = NamedTemporaryFile('w', suffix='.sql', delete=False)
+        f = NamedTemporaryFile('w', suffix=self.suffix, delete=False)
         f.write(s)
         f.close()
 
-        # Create our own instance of pydap to response to this request *sigh*
-        class MyDapServer(DapServer):
-            def __init__(self, *args, **kwargs):
-                pass
-            @property
-            def config(self):
-                return {'handlers': [{'url': filepath.rsplit('.', 1)[0], 'file': f.name}]}
-        
-        app = MyDapServer()
+        app = SQLHandler(f.name)
         response = app(environ, start_response)
         os.remove(f.name)
         return response
@@ -155,6 +147,7 @@ class RawPcicSqlHandler(PcicSqlHandler):
     '''Subclass of PcicSqlHandler which handles the raw observations
     '''
     extensions = re.compile(r"^.*\.rsql$", re.IGNORECASE)
+    suffix = '.rsql'
     virtual = True
 
     def get_full_query(self, stn_id, sesh):
@@ -179,6 +172,7 @@ class ClimoPcicSqlHandler(PcicSqlHandler):
     '''Subclass of PcicSqlHandler which handles the climatological observations
     '''
     extensions = re.compile(r"^.*\.csql$", re.IGNORECASE)
+    suffix = '.csql'
     virtual = True
 
     def get_full_query(self, stn_id, sesh):
