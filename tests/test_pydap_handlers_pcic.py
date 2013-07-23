@@ -200,7 +200,7 @@ def test_returns_content(conn_params, monkeypatch):
     
     monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
 
-    url = '/EC/1106200.sql.das'
+    url = '/EC/1106200.rsql.das'
     req = Request.blank(url)
     resp = req.get_response(x)
     assert resp.status == '200 OK'
