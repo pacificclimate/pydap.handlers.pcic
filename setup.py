@@ -1,7 +1,7 @@
 import string
 from setuptools import setup
 
-__version__ = (0, 0, 1)
+__version__ = (0, 0, 2)
 
 sw_path = 'hg+ssh://medusa.pcic.uvic.ca//home/data/projects/comp_support/software'
 
