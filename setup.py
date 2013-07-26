@@ -3,6 +3,8 @@ from setuptools import setup
 
 __version__ = (0, 0, 1)
 
+sw_path = 'hg+ssh://medusa.pcic.uvic.ca//home/data/projects/comp_support/software'
+
 setup(
     name="pydap.handlers.pcic",
     description="A custom handler for PCIC's in-situ observational database",
@@ -17,8 +19,11 @@ setup(
                     rsql = pydap.handlers.pcic:RawPcicSqlHandler
                     csql = pydap.handlers.pcic:ClimoPcicSqlHandler
                  ''',
-    install_requires=['pydap.handlers.sql',
-                      'pycds>=0.0.6'],
+    dependency_links = ['{sw_path}/pydap.handlers.sql@780393261100#egg=pydap.handlers.sql-0.5rc1'.format(**locals()),
+                        '{sw_path}/PyCDS@0.0.8#egg=pycds-0.0.8'.format(**locals())], #
+    install_requires = ['setuptools==0.9.8', # for hg+ssh urls
+                        'pydap.handlers.sql>0.4',
+                        'pycds>=0.0.8'],
     zip_safe=True,
         classifiers='''Development Status :: 2 - Pre-Alpha
 Environment :: Console

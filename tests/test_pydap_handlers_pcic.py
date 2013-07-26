@@ -209,3 +209,19 @@ def test_returns_content(conn_params, monkeypatch):
             String display_name "Temperature (Max.)";
             String name "MAX_TEMP";
             String cell_method "time: maximum";''' in resp.body
+
+def test_returns_html_content(conn_params, monkeypatch):
+    '''This is not a good 'unit' test in that it relies on some intergration with Pydap
+       Unfortunately this is the case... this whole _package_ relies heavily on Pydap!
+    '''
+    x = RawPcicSqlHandler(conn_params)
+
+    def my_get_full_query(self, stn_id, sesh):
+        return sql_station_table(sesh, stn_id)
+    
+    monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
+
+    url = '/EC/1106200.rsql.html'
+    req = Request.blank(url)
+    resp = req.get_response(x)
+    assert resp.status == '200 OK'
