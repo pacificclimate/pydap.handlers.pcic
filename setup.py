@@ -1,5 +1,18 @@
+import sys
 import string
 from setuptools import setup
+from setuptools.command.test import test as TestCommand
+
+class PyTest(TestCommand):
+    def finalize_options(self):
+        TestCommand.finalize_options(self)
+        self.test_args = ['-v', '-v']
+        self.test_suite = True
+    def run_tests(self):
+        #import here, cause outside the eggs aren't loaded
+        import pytest
+        errno = pytest.main(self.test_args)
+        sys.exit(errno)                                                                        
 
 __version__ = (0, 0, 2)
 
@@ -19,11 +32,17 @@ setup(
                     rsql = pydap.handlers.pcic:RawPcicSqlHandler
                     csql = pydap.handlers.pcic:ClimoPcicSqlHandler
                  ''',
-    dependency_links = ['{sw_path}/pydap.handlers.sql@780393261100#egg=pydap.handlers.sql-0.5rc1'.format(**locals()),
-                        '{sw_path}/PyCDS@0.0.8#egg=pycds-0.0.8'.format(**locals())], #
-    install_requires = ['setuptools==0.9.8', # for hg+ssh urls
-                        'pydap.handlers.sql>0.4',
-                        'pycds>=0.0.8'],
+    dependency_links = ['{0}/pydap.handlers.sql@9d5d7347ef67#egg=pydap.handlers.sql-0.6dev'.format(sw_path),
+                        '{0}/PyCDS@0.0.12#egg=pycds-0.0.12'.format(sw_path),
+                        '{0}/Pydap-3.2@c604b6780699#egg=Pydap-3.2.1dev'.format(sw_path),
+                        '{0}/pydap.responses.html@d8689fab1694#egg=pydap.responses.html-0.2dev'.format(sw_path)],
+    install_requires = ['pydap.handlers.sql==0.6dev',
+                        'pycds>=0.0.12',
+                        'pydap.responses.html==0.2dev'],
+    tests_require=['pytest',
+                   'sqlalchemy',
+                   'webob'],
+    cmdclass = {'test': PyTest},
     zip_safe=True,
         classifiers='''Development Status :: 2 - Pre-Alpha
 Environment :: Console
