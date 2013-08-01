@@ -1,17 +1,30 @@
 import pytest
 from webob.request import Request
+from sqlalchemy.orm import sessionmaker
 
 from pycds.util import sql_station_table
+from pydap.handlers.sql import Engines
 from pydap.handlers.pcic import PcicSqlHandler, RawPcicSqlHandler, ClimoPcicSqlHandler
 
-def test_composite(test_session):
-    pass
+@pytest.fixture(scope="function")
+def raw_handler(monkeypatch, conn_params, test_session):
+    handler = RawPcicSqlHandler(conn_params, test_session)
 
-def test_raw(test_session):
-    pass
+    def my_get_full_query(self, stn_id, sesh):
+        return sql_station_table(sesh, stn_id)
+    monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
 
-def test_climo(test_session):
-    pass
+    def my_get_sesh(self):
+        Session = sessionmaker(bind=Engines[self.dsn])
+        sesh = Session()
+        # Do the extra work for allowing spatial extensions for testing
+        sesh.connection().connection.enable_load_extension(True)
+        sesh.execute("select load_extension('libspatialite.so')")
+        return sesh
+    monkeypatch.setattr(RawPcicSqlHandler, 'get_sesh', my_get_sesh)
+
+    return handler
+
 
 @pytest.mark.parametrize(('input', 'expected'), [
     # Raw
@@ -157,52 +170,36 @@ def test_get_vars(test_session, input, expected):
                            'standard_name: "lwe_thickness_of_precipitation"'
                            ]
                          )])
-def test_create_ini(conn_params, net_name, native_id, expected, monkeypatch):
-    x = RawPcicSqlHandler(conn_params)
+def test_create_ini(raw_handler, net_name, native_id, expected, monkeypatch):
     # get_full_query is not important for this test
-    monkeypatch.setattr(x, 'get_full_query', lambda x, y: '' )
-    s = x.create_ini(net_name, native_id)
+    monkeypatch.setattr(raw_handler, 'get_full_query', lambda x, y: '' )
+    s = raw_handler.create_ini(net_name, native_id)
 
     for substr in expected:
         print substr
         assert substr in s
 
-def test_monkey(test_session, conn_params, monkeypatch):
-    x = RawPcicSqlHandler(conn_params)
-
-    def my_get_full_query(self, stn_id, sesh):
-        return sql_station_table(sesh, stn_id)
-    
-    monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
-    
-    s = x.get_full_query(913, test_session)
+def test_monkey(raw_handler, test_session):
+    s = raw_handler.get_full_query(913, test_session)
     rv = test_session.execute(s)
 
 @pytest.mark.parametrize('url', [
     '/EC/913/junk', # unparseable path
     '/EC/913.sql.html' # non-existant station
     ])
-def test_404s(conn_params, url):
-    x = RawPcicSqlHandler(conn_params)
+def test_404s(raw_handler, url):
     req = Request.blank(url)
-    resp = req.get_response(x)
+    resp = req.get_response(raw_handler)
 
     assert '404' in resp.status
 
-def test_returns_content(conn_params, monkeypatch):
+def test_returns_content(raw_handler):
     '''This is not a good 'unit' test in that it relies on some intergration with Pydap
        Unfortunately this is the case... this whole _package_ relies heavily on Pydap!
     '''
-    x = RawPcicSqlHandler(conn_params)
-
-    def my_get_full_query(self, stn_id, sesh):
-        return sql_station_table(sesh, stn_id)
-    
-    monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
-
     url = '/EC/1106200.rsql.das'
     req = Request.blank(url)
-    resp = req.get_response(x)
+    resp = req.get_response(raw_handler)
     assert resp.status == '200 OK'
 
     assert '''        MAX_TEMP {
@@ -210,18 +207,11 @@ def test_returns_content(conn_params, monkeypatch):
             String name "MAX_TEMP";
             String cell_method "time: maximum";''' in resp.body
 
-def test_returns_html_content(conn_params, monkeypatch):
+def test_returns_html_content(raw_handler):
     '''This is not a good 'unit' test in that it relies on some intergration with Pydap
        Unfortunately this is the case... this whole _package_ relies heavily on Pydap!
     '''
-    x = RawPcicSqlHandler(conn_params)
-
-    def my_get_full_query(self, stn_id, sesh):
-        return sql_station_table(sesh, stn_id)
-    
-    monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
-
     url = '/EC/1106200.rsql.html'
     req = Request.blank(url)
-    resp = req.get_response(x)
+    resp = req.get_response(raw_handler)
     assert resp.status == '200 OK'

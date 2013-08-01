@@ -26,9 +26,12 @@ class PcicSqlHandler(object):
     '''
     extensions = re.compile(r"^.*\.psql$", re.IGNORECASE)
 
-    def __init__(self, dsn):
+    def __init__(self, dsn, sesh=None):
         self.dsn = dsn
-
+        if sesh:
+            # Stash a copy of our engine in pydap.handlers.sql so that it will use it for data queries
+            Engines[self.dsn] = sesh.get_bind()
+        
     def __call__(self, environ, start_response):
         ''':param environ: WSGI environment such that PATH_INFO is set to something that matches the pattern /[network_name]/[native_id].sql.[response]
            :rtype: iterable WSGI response
@@ -78,12 +81,14 @@ class PcicSqlHandler(object):
 
         full_query = self.get_full_query(station_id, sesh)
 
-        q = sesh.query(Station.native_id, History.station_name, Network.name).join(History).join(Network).filter(Station.id == station_id)
+        q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
         rv = q.first()
         try:
-            native_id, station_name, network = rv
+            native_id, station_name, network, geom = rv
+            lat = sesh.scalar(geom.y)
+            lon = sesh.scalar(geom.x)
         except TypeError:
-            native_id, station_name, network = (station_id, '', '')
+            native_id, station_name, network, lat, lon = (station_id, '', '', '', '')
 
         dsn = self.dsn
         full_query = full_query.replace('"', '\\"')
@@ -102,8 +107,8 @@ dataset:
     station_id: "%(native_id)s"
     station_name: "%(station_name)s"
     network: "%(network)s"
-    latitude: !Query \'SELECT st_y(the_geom) FROM meta_history WHERE station_id = %(station_id)d\'
-    longitude: !Query \'SELECT st_x(the_geom) FROM meta_history WHERE station_id = %(station_id)d\'
+    latitude: %(lat)f
+    longitude: %(lon)f
     history: "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database"
 
 sequence:
