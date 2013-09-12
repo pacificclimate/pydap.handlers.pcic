@@ -32,20 +32,20 @@ setup(
                     rsql = pydap.handlers.pcic:RawPcicSqlHandler
                     csql = pydap.handlers.pcic:ClimoPcicSqlHandler
                  ''',
-    dependency_links = ['{0}/pydap.handlers.sql@9d5d7347ef67#egg=pydap.handlers.sql-0.6dev'.format(sw_path),
+    dependency_links = ['{0}/pydap.handlers.sql@75263bc93cec#egg=pydap.handlers.sql-0.7'.format(sw_path),
                         '{0}/PyCDS@0.0.13#egg=pycds-0.0.13'.format(sw_path),
                         '{0}/Pydap-3.2@c604b6780699#egg=Pydap-3.2.1dev'.format(sw_path),
                         '{0}/pydap.responses.html@d8689fab1694#egg=pydap.responses.html-0.2dev'.format(sw_path)],
-    install_requires = ['pydap.handlers.sql==0.6dev',
-                        'pycds>=0.0.13',
-                        'pydap.responses.html==0.2dev'],
+    install_requires = ['pydap.handlers.sql >=0.6dev',
+                        'pycds >=0.0.13',
+                        'pydap.responses.html >=0.2dev'],
     tests_require=['pytest',
                    'sqlalchemy',
                    'pysqlite',
                    'webob'],
     cmdclass = {'test': PyTest},
     zip_safe=True,
-        classifiers='''Development Status :: 2 - Pre-Alpha
+    classifiers='''Development Status :: 2 - Pre-Alpha
 Environment :: Console
 Environment :: Web Environment
 Framework :: Paste
