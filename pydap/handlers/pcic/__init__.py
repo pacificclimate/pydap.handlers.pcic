@@ -10,6 +10,7 @@ Each dataset will contain a variety of global attributes such as the station and
 import os, sys
 import re
 from tempfile import NamedTemporaryFile
+from contextlib import contextmanager
 
 from sqlalchemy import or_, not_
 from sqlalchemy.orm import sessionmaker
@@ -21,6 +22,21 @@ from pydap.handlers.sql import SQLHandler, Engines
 
 from pdb import set_trace
 
+# From http://docs.sqlalchemy.org/en/rel_0_9/orm/session.html#session-faq-whentocreate
+@contextmanager
+def session_scope(dsn):
+    '''Provide a transactional scope around a series of operations.'''
+    factory = sessionmaker(bind=Engines[dsn])
+    session = factory()
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
 class PcicSqlHandler(object):
     '''A Pydap handler which reads in-situ observations from the BC Provincial Climate Data Set.
     '''
@@ -28,6 +44,10 @@ class PcicSqlHandler(object):
 
     def __init__(self, dsn, sesh=None):
         self.dsn = dsn
+        def session_scope_factory():
+            return session_scope(dsn)
+        self.session_scope_factory = session_scope_factory
+
         if sesh:
             # Stash a copy of our engine in pydap.handlers.sql so that it will use it for data queries
             Engines[self.dsn] = sesh.get_bind()
@@ -72,27 +92,27 @@ class PcicSqlHandler(object):
            :param environ: WSGI environment which *must* contain a dsn string under the key pydap.handlers.pcic.dsn
            :rtype: StringIO.StringIO
         '''
-        sesh = self.get_sesh()
+        with self.session_scope_factory() as sesh:
 
-        q = sesh.query(Station.id).join(Network).filter(Station.native_id == native_id).filter(Network.name == net_name)
-        if not q.first():
-            raise ValueError("No such station {net_name}/{native_id}".format(**locals()))
-        station_id, = q.first()
+            q = sesh.query(Station.id).join(Network).filter(Station.native_id == native_id).filter(Network.name == net_name)
+            if not q.first():
+                raise ValueError("No such station {net_name}/{native_id}".format(**locals()))
+            station_id, = q.first()
 
-        full_query = self.get_full_query(station_id, sesh)
+            full_query = self.get_full_query(station_id, sesh)
 
-        q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
-        rv = q.first()
-        try:
-            native_id, station_name, network, geom = rv
-            lat = sesh.scalar(geom.y)
-            lon = sesh.scalar(geom.x)
-        except TypeError:
-            native_id, station_name, network, lat, lon = (station_id, '', '', '', '')
+            q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
+            rv = q.first()
+            try:
+                native_id, station_name, network, geom = rv
+                lat = sesh.scalar(geom.y)
+                lon = sesh.scalar(geom.x)
+            except TypeError:
+                native_id, station_name, network, lat, lon = (station_id, '', '', '', '')
 
-        dsn = self.dsn
-        full_query = full_query.replace('"', '\\"')
-        s = '''database:
+            dsn = self.dsn
+            full_query = full_query.replace('"', '\\"')
+            s = '''database:
   dsn: "%(dsn)s"
   id: "obs_time"
   table: "(%(full_query)s) as foo"
@@ -123,7 +143,7 @@ time:
 
 ''' % locals()
 
-        stn_vars = self.get_vars(station_id, sesh)
+            stn_vars = self.get_vars(station_id, sesh)
         
         for var_name, unit, standard_name, cell_method, long_description, display_name in stn_vars:
             s = s + '''%(var_name)s:

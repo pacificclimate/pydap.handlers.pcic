@@ -14,7 +14,7 @@ class PyTest(TestCommand):
         errno = pytest.main(self.test_args)
         sys.exit(errno)                                                                        
 
-__version__ = (0, 0, 3)
+__version__ = (0, 0, 4)
 
 sw_path = 'hg+ssh://medusa.pcic.uvic.ca//home/data/projects/comp_support/software'
 
@@ -35,10 +35,10 @@ setup(
     dependency_links = ['{0}/pydap.handlers.sql@75263bc93cec#egg=pydap.handlers.sql-0.7'.format(sw_path),
                         '{0}/PyCDS@0.0.13#egg=pycds-0.0.13'.format(sw_path),
                         '{0}/Pydap-3.2@c604b6780699#egg=Pydap-3.2.1dev'.format(sw_path),
-                        '{0}/pydap.responses.html@d8689fab1694#egg=pydap.responses.html-0.2dev'.format(sw_path)],
-    install_requires = ['pydap.handlers.sql >=0.6dev',
+                        '{0}/pydap.responses.html@d8689fab1694#egg=pydap.responses.html-0.2'.format(sw_path)],
+    install_requires = ['pydap.handlers.sql >=0.6',
                         'pycds >=0.0.13',
-                        'pydap.responses.html >=0.2dev'],
+                        'pydap.responses.html >=0.2'],
     tests_require=['pytest',
                    'sqlalchemy',
                    'pysqlite',
