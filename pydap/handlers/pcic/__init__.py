@@ -37,9 +37,9 @@ class PcicSqlHandler(object):
            :rtype: iterable WSGI response
         '''
         filepath = environ.get('PATH_INFO')
-        match = re.search(r"/([a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)\..sql", filepath)
+        match = re.search(r"/([-a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)\..sql", filepath)
         if not match:
-            return HTTPNotFound("Could not make sense of path {0}{1}".format(environ.get('PATH_INFO', ''), environ.get('SCRIPT_NAME', '')))(environ, start_response)
+            return HTTPNotFound("Could not make sense of path {0}{1}".format(environ.get('SCRIPT_NAME', ''), environ.get('PATH_INFO', '')))(environ, start_response)
 
         net_name, native_id = match.groups()
 
