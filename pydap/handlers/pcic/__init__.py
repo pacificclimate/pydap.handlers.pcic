@@ -7,7 +7,8 @@ The handler will configure a different dataset for each station based on the fil
 Each dataset will contain a variety of global attributes such as the station and network names, latitude and longitide of the station and some contact information. Each dataset will contain one sequence named ``station_observations`` and some number of variables (including time) attached to that sequence. Each variable will be attributed with its name, long_name, CF standard_name, CF cell_method and the units.
 '''
 
-import os, sys
+import os
+import sys
 import re
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
@@ -15,12 +16,10 @@ from contextlib import contextmanager
 from sqlalchemy import or_, not_
 from sqlalchemy.orm import sessionmaker
 from paste.httpexceptions import HTTPNotFound
+
 from pydap.wsgi.app import DapServer
-
-from pycds import *
 from pydap.handlers.sql import SQLHandler, Engines
-
-from pdb import set_trace
+from pycds import *
 
 # From http://docs.sqlalchemy.org/en/rel_0_9/orm/session.html#session-faq-whentocreate
 @contextmanager
