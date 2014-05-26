@@ -30,16 +30,10 @@ setup(
                     rsql = pydap.handlers.pcic:RawPcicSqlHandler
                     csql = pydap.handlers.pcic:ClimoPcicSqlHandler
                  ''',
-    dependency_links = ['https://github.com/pacificclimate/pydap.handlers.sql/tarball/master#egg=pydap.handlers.sql-0.7',
-                        'https://github.com/pacificclimate/pydap.handlers.csv/tarball/master#egg=pydap.handlers.csv-0.3', #This is actually a dep for pydap.handlers.sql, but pip doesn't follow dependency links past one level
-                        'https://github.com/pacificclimate/pydap.responses.html/tarball/master#egg=pydap.responses.html-0.2',
-                        'https://github.com/pacificclimate/pycds/tarball/master#egg=pycds',
-                        'https://github.com/pacificclimate/pydap-pdp/tarball/master#egg=Pydap-3.2.2',
-                        'https://github.com/pacificclimate/pysqlite/tarball/master#egg=pysqlite'],
     install_requires = ['pydap.handlers.sql',
                         'pycds',
                         'pydap.responses.html',
-                        'Pydap >=3.2.1',
+                        'pydap_pdp >=3.2.1',
                         'sqlalchemy',
                         'paste'],
     tests_require=['pytest',
