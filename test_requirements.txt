@@ -1,0 +1,4 @@
+-rrequirements.txt
+WebOb==1.4
+pysqlite==2.6.3
+pytest==2.5.2
