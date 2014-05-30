@@ -3,5 +3,5 @@ PyCDS==0.0.17
 SQLAlchemy==0.8.6
 pydap-pdp==3.2.2
 pydap.handlers.sql==0.7
-pydap.responses.html==0.2
+pydap.responses.html==0.3
 
