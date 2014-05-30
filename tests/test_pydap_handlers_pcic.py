@@ -192,10 +192,40 @@ def test_returns_content(raw_handler):
     resp = req.get_response(raw_handler)
     assert resp.status == '200 OK'
 
-    assert '''        MAX_TEMP {
-            String display_name "Temperature (Max.)";
+    s = '''Attributes {
+    NC_GLOBAL {
+        String network "EC";
+        String contact "Faron Anslow <fanslow@uvic.ca>";
+        String name "CRMP/EC";
+        String owner "PCIC";
+        Float64 version 0.2;
+        String station_id "1106200";
+        Float64 latitude 49.3303;
+        String station_name "POINT ATKINSON";
+        Float64 longitude -123.265;
+        String history "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database";
+    }
+    station_observations {
+        MAX_TEMP {
             String name "MAX_TEMP";
-            String cell_method "time: maximum";''' in resp.body
+            Int32 missing_value -9999;
+            String axis "Y";
+            String long_name "Maximum daily temperature";
+            String standard_name "air_temperature";
+            String display_name "Temperature (Max.)";
+            String units "celsius";
+            String type "Float64";
+            String cell_method "time: maximum";
+        }
+        time {
+            String long_name "observation time";
+            String type "String";
+            String name "time";
+            String axis "T";
+        }
+    }
+}'''
+    assert all([x in resp.body for x in s.split('\n')])
 
 def test_returns_html_content(raw_handler):
     '''This is not a good 'unit' test in that it relies on some intergration with Pydap
