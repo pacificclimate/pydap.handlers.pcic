@@ -50,7 +50,7 @@ class PcicSqlHandler(object):
         if sesh:
             # Stash a copy of our engine in pydap.handlers.sql so that it will use it for data queries
             Engines[self.dsn] = sesh.get_bind()
-        
+
     def __call__(self, environ, start_response):
         ''':param environ: WSGI environment such that PATH_INFO is set to something that matches the pattern /[network_name]/[native_id].sql.[response]
            :rtype: iterable WSGI response
@@ -63,7 +63,8 @@ class PcicSqlHandler(object):
         net_name, native_id = match.groups()
 
         try:
-            s = self.create_ini(net_name, native_id)
+            with self.session_scope_factory() as sesh:
+                s = self.create_ini(sesh, net_name, native_id)
         except ValueError, e:
             return HTTPNotFound(e.message)(environ, start_response) # 404  
         f = NamedTemporaryFile('w', suffix=self.suffix, delete=False)
@@ -75,43 +76,31 @@ class PcicSqlHandler(object):
         os.remove(f.name)
         return response
 
-    def get_sesh(self):
-        '''Gets a database engine to be used for queries. Either uses the engine stored at the module leve in :mod:`pydap.handlers.sql`, if available, or creates it, if not.
-
-           :param params: dict containing the parameters to an :mod:`sqlalchemy` DSN, in particular `user`, `password`, `host`, and `database`
-           :type params: dict
-           :rtype: sqlalchemy.Session
-        '''
-        Session = sessionmaker(bind=Engines[self.dsn])
-        return Session()
-
-    def create_ini(self, net_name, native_id):
+    def create_ini(self, sesh, net_name, native_id):
         '''Creates the actual text of a pydap SQL handler config file and returns it as a StringIO. `self.filepath` should be set before this is called. It will typically be something like ``.../[network_name]/[native_id].rsql``. The database station_id is looked up from that.
         
            :param environ: WSGI environment which *must* contain a dsn string under the key pydap.handlers.pcic.dsn
            :rtype: StringIO.StringIO
         '''
-        with self.session_scope_factory() as sesh:
+        q = sesh.query(Station.id).join(Network).filter(Station.native_id == native_id).filter(Network.name == net_name)
+        if not q.first():
+            raise ValueError("No such station {net_name}/{native_id}".format(**locals()))
+        station_id, = q.first()
 
-            q = sesh.query(Station.id).join(Network).filter(Station.native_id == native_id).filter(Network.name == net_name)
-            if not q.first():
-                raise ValueError("No such station {net_name}/{native_id}".format(**locals()))
-            station_id, = q.first()
+        full_query = self.get_full_query(station_id, sesh)
 
-            full_query = self.get_full_query(station_id, sesh)
+        q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
+        rv = q.first()
+        try:
+            native_id, station_name, network, geom = rv
+            lat = sesh.scalar(geom.y)
+            lon = sesh.scalar(geom.x)
+        except TypeError:
+            native_id, station_name, network, lat, lon = (station_id, '', '', '', '')
 
-            q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
-            rv = q.first()
-            try:
-                native_id, station_name, network, geom = rv
-                lat = sesh.scalar(geom.y)
-                lon = sesh.scalar(geom.x)
-            except TypeError:
-                native_id, station_name, network, lat, lon = (station_id, '', '', '', '')
-
-            dsn = self.dsn
-            full_query = full_query.replace('"', '\\"')
-            s = '''database:
+        dsn = self.dsn
+        full_query = full_query.replace('"', '\\"')
+        s = '''database:
   dsn: "%(dsn)s"
   id: "obs_time"
   table: "(%(full_query)s) as foo"
@@ -142,7 +131,7 @@ time:
 
 ''' % locals()
 
-            stn_vars = self.get_vars(station_id, sesh)
+        stn_vars = self.get_vars(station_id, sesh)
         
         for var_name, unit, standard_name, cell_method, long_description, display_name in stn_vars:
             s = s + '''%(var_name)s:

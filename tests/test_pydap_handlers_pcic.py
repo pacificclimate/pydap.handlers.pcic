@@ -14,17 +14,7 @@ def raw_handler(monkeypatch, conn_params, test_session):
         return sql_station_table(sesh, stn_id)
     monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
 
-    def my_get_sesh(self):
-        Session = sessionmaker(bind=Engines[self.dsn])
-        sesh = Session()
-        # Do the extra work for allowing spatial extensions for testing
-        sesh.connection().connection.enable_load_extension(True)
-        sesh.execute("select load_extension('libspatialite.so')")
-        return sesh
-    monkeypatch.setattr(RawPcicSqlHandler, 'get_sesh', my_get_sesh)
-
     return handler
-
 
 @pytest.mark.parametrize(('input', 'expected'), [
     # Raw
@@ -170,10 +160,10 @@ def test_get_vars(test_session, input, expected):
                            'standard_name: "lwe_thickness_of_precipitation"'
                            ]
                          )])
-def test_create_ini(raw_handler, net_name, native_id, expected, monkeypatch):
+def test_create_ini(raw_handler, net_name, native_id, expected, monkeypatch, test_session):
     # get_full_query is not important for this test
     monkeypatch.setattr(raw_handler, 'get_full_query', lambda x, y: '' )
-    s = raw_handler.create_ini(net_name, native_id)
+    s = raw_handler.create_ini(test_session, net_name, native_id)
 
     for substr in expected:
         print substr
