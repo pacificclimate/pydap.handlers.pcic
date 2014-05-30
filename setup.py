@@ -39,7 +39,8 @@ Otherwise, you will not be able to run any of the unit tests for this package fo
         warnings.warn('pysqlite2 package is not installed.\n' + msg)
         return False
 
-    engine = create_engine('sqlite:///{0}'.format('pycds/data/crmp.sqlite'), module=dbapi2, echo=True)
+    dsn = 'sqlite:///{0}'.format(resource_filename('pycds', 'data/crmp.sqlite'))
+    engine = create_engine(dsn, module=dbapi2, echo=True)
     con = engine.raw_connection().connection
     if not hasattr(con, 'enable_load_extension'):
         warnings.warn('The pysqlite2 package has been built without extension loading support.\n' + msg)
