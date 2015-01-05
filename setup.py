@@ -6,7 +6,7 @@ from pkg_resources import resource_filename
 import ctypes
 import warnings
 
-__version__ = (0, 0, 4)
+__version__ = (0, 0, 5)
 
 class PyTest(TestCommand):
     def finalize_options(self):

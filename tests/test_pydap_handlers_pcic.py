@@ -222,6 +222,7 @@ def test_returns_content(raw_handler):
             String type "String";
             String name "time";
             String axis "T";
+            String units "days since 1970-01-01";
         }
     }
 }'''
