@@ -14,7 +14,7 @@ from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 import logging
 
-from sqlalchemy import or_, not_
+from sqlalchemy import or_, not_, func
 from sqlalchemy.orm import sessionmaker
 from paste.httpexceptions import HTTPNotFound
 
@@ -95,13 +95,17 @@ class PcicSqlHandler(object):
         q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
         if q.count() < 1:
             native_id, station_name, network, lat, lon = (native_id, '', net_name, float('nan'), float('nan'))
-        # FIXME: Test this and use it
-        #elif q.count() > 1:
-        #    logger.warning("Multiple history entries (ids {}) were found for a single station_id, but we're only showing metadata for the first".format([]))
         else:
+            if q.count() > 1:
+                logger.warning("Multiple history entries (ids {}) were found for a single station_id, but we're reporting locations for the most recent".format([]))
+                sdate, = sesh.query(func.max(History.sdate)).filter(History.station_id == station_id).first()
+                # This should never happen
+                if not sdate:
+                    raise ValueError("Found multiple history entries for station_id {}, but none have a valid record start date!".format(station_id))
+                q = q.filter(History.sdate == sdate)
+
             _, station_name, network, geom = q.first()
-            lat = sesh.scalar(geom.y)
-            lon = sesh.scalar(geom.x)
+            lat, lon = (sesh.scalar(geom.y), sesh.scalar(geom.x)) if geom else (float('nan'), float('nan'))
 
         dsn = self.dsn
         full_query = full_query.replace('"', '\\"')

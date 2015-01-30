@@ -1,3 +1,5 @@
+import datetime
+
 import pytest
 import pycds
 from pycds.util import create_test_database
@@ -51,6 +53,37 @@ def session_with_duplicate_station(in_ram_session):
     history1 = pycds.History()
     station1 = pycds.Station(native_id='1106200', network=ecraw, histories=[history1])
     s.add_all([ecraw, station0, station1, history1])
+    s.commit()
+
+    return s
+
+@pytest.fixture(scope="function")
+def session_with_multiple_hist_ids_for_one_station(in_ram_session):
+    s = in_ram_session
+
+    net = pycds.Network(name='test_network')
+    history0 = pycds.History(station_name='Some station', elevation=999,
+                             sdate = datetime.datetime(1880, 1, 1),
+                             edate = datetime.datetime(2000, 1, 1))
+    # Empty end date... i.e. and "active station"
+    history1 = pycds.History(station_name='The same station', elevation=999,
+                             sdate = datetime.datetime(2000, 1, 2),
+                             the_geom = 'POINT(-118 49)')
+    station0 = pycds.Station(native_id='some_station', network=net, histories=[history0, history1])
+    s.add(station0)
+    s.commit()
+
+    return s
+
+@pytest.fixture(scope="function")
+def session_multiple_hist_ids_null_dates(in_ram_session):
+    s = in_ram_session
+
+    net = pycds.Network(name='test_network')
+    history0 = pycds.History(station_name='Some station', elevation=999)
+    history1 = pycds.History(station_name='The same station', elevation=999)
+    station0 = pycds.Station(native_id='some_station', network=net, histories=[history0, history1])
+    s.add(station0)
     s.commit()
 
     return s
