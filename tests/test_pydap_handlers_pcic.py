@@ -2,19 +2,9 @@ import pytest
 from webob.request import Request
 from sqlalchemy.orm import sessionmaker
 
-from pycds.util import sql_station_table
+from pycds import Network, Station
 from pydap.handlers.sql import Engines
 from pydap.handlers.pcic import PcicSqlHandler, RawPcicSqlHandler, ClimoPcicSqlHandler
-
-@pytest.fixture(scope="function")
-def raw_handler(monkeypatch, conn_params, test_session):
-    handler = RawPcicSqlHandler(conn_params, test_session)
-
-    def my_get_full_query(self, stn_id, sesh):
-        return sql_station_table(sesh, stn_id)
-    monkeypatch.setattr(RawPcicSqlHandler, 'get_full_query', my_get_full_query)
-
-    return handler
 
 @pytest.mark.parametrize(('input', 'expected'), [
     # Raw

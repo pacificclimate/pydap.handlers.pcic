@@ -12,6 +12,7 @@ import sys
 import re
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
+import logging
 
 from sqlalchemy import or_, not_
 from sqlalchemy.orm import sessionmaker
@@ -20,6 +21,8 @@ from paste.httpexceptions import HTTPNotFound
 from pydap.wsgi.app import DapServer
 from pydap.handlers.sql import SQLHandler, Engines
 from pycds import *
+
+logger = logging.getLogger(__name__)
 
 # From http://docs.sqlalchemy.org/en/rel_0_9/orm/session.html#session-faq-whentocreate
 @contextmanager
@@ -90,16 +93,19 @@ class PcicSqlHandler(object):
         full_query = self.get_full_query(station_id, sesh)
 
         q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
-        rv = q.first()
-        try:
-            native_id, station_name, network, geom = rv
+        if q.count() < 1:
+            native_id, station_name, network, lat, lon = (native_id, '', net_name, float('nan'), float('nan'))
+        # FIXME: Test this and use it
+        #elif q.count() > 1:
+        #    logger.warning("Multiple history entries (ids {}) were found for a single station_id, but we're only showing metadata for the first".format([]))
+        else:
+            _, station_name, network, geom = q.first()
             lat = sesh.scalar(geom.y)
             lon = sesh.scalar(geom.x)
-        except TypeError:
-            native_id, station_name, network, lat, lon = (station_id, '', '', '', '')
 
         dsn = self.dsn
         full_query = full_query.replace('"', '\\"')
+
         s = '''database:
   dsn: "%(dsn)s"
   id: "obs_time"
