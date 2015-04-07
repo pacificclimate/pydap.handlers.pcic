@@ -89,14 +89,14 @@ class PcicSqlHandler(object):
 
         full_query = self.get_full_query(station_id, sesh)
 
-        q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
+        q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom, History.elevation).join(History).join(Network).filter(Station.id == station_id)
         rv = q.first()
         try:
-            native_id, station_name, network, geom = rv
+            native_id, station_name, network, geom, elevation = rv
             lat = sesh.scalar(geom.y)
             lon = sesh.scalar(geom.x)
         except TypeError:
-            native_id, station_name, network, lat, lon = (station_id, '', '', '', '')
+            native_id, station_name, network, lat, lon, elevation = (station_id, '', '', '', '', '')
 
         dsn = self.dsn
         full_query = full_query.replace('"', '\\"')
@@ -117,6 +117,7 @@ dataset:
     network: "%(network)s"
     latitude: %(lat)f
     longitude: %(lon)f
+    elevation: %(elevation)f
     history: "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database"
 
 sequence:

@@ -1,10 +1,117 @@
-import pytest
-import pycds
+from collections import namedtuple
 
-@pytest.fixture(scope="module")
+import pytest
+from pycds import *
+from pycds.util import *
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
+from pysqlite2 import dbapi2 as sqlite
+from pycds.util import create_test_database
+
+dsn = 'sqlite:///'
+
+@pytest.fixture(scope="function")
 def test_session():
-    return pycds.test_session()
+
+    engine = create_engine(dsn, module=sqlite, echo=True)
+    engine.echo = True
+
+    # Make sure spatial extensions are loaded for each connection, not just the current session
+    # https://groups.google.com/d/msg/sqlalchemy/eDpJ-yZEnqU/_XJ4Pmd712QJ
+    @event.listens_for(engine, "connect")
+    def connect(dbapi_connection, connection_rec):
+        dbapi_connection.enable_load_extension(True)
+        dbapi_connection.execute("select load_extension('libspatialite.so')")
+
+    create_test_database(engine)
+    Session = sessionmaker(bind=engine)
+    sesh = Session()
+    return sesh
+
+@pytest.fixture(scope="function")
+def test_db_with_variables(test_session):
+    sesh = test_session
+
+    moti = Network(**TestNetwork('MoTI', 'Ministry of Transportation and Infrastructure', '000000')._asdict())
+    moe = Network(**TestNetwork('MoE', 'Ministry of Environment', '000000')._asdict())
+    sesh.add_all([moti, moe])
+
+    histories = [History(station_name="Invermere",
+                         elevation=1000,
+                         the_geom='POINT(-116.0274 50.4989)',
+                         province='BC',
+                         freq='1-hourly'),
+                 History(station_name="Masset",
+                         elevation=0,
+                         the_geom='POINT(-132.14255 54.01950)',
+                         province='BC',
+                         freq='1-year'),
+                 ]
+    
+    invermere = Station(native_id='invermere', network=moti, histories=[histories[0]])
+    masset = Station(native_id='masset', network=moe, histories=[histories[1]])
+    sesh.add_all([invermere, masset])
+    
+    variables = [Variable(name='air-temperature',
+                          unit='degC',
+                          standard_name='air_temperature',
+                          cell_method='time: point',
+                          description='Instantaneous air temperature',
+                          display_name='Temperature (Point)',
+                          network=moti),
+                 Variable(name='T_mean_Climatology',
+                          unit='celsius',
+                          standard_name='air_temperature',
+                          cell_method='t: mean within days t: mean within months t: mean over years',
+                          description='Climatological mean of monthly mean of mean daily temperature',
+                          display_name='Temperature Climatology (Mean)',
+                          network=moti),
+                 Variable(name='dew-point',
+                          unit='degC',
+                          standard_name='dew_point_temperature',
+                          cell_method='time: point',
+                          display_name='Dew Point Temperature (Mean)',
+                          network=moti),
+                 Variable(name='BAR_PRESS_HOUR',
+                          unit='millibar',
+                          standard_name='air_pressure',
+                          cell_method='time:point',
+                          description='Instantaneous air pressure',
+                          display_name='Air Pressure (Point)',
+                          network=moe),
+                ]
+    sesh.add_all(variables)
+    sesh.commit()
+
+    vars_per_history = [VarsPerHistory(history_id=histories[0].id, vars_id=variables[0].id),
+                        VarsPerHistory(history_id=histories[1].id, vars_id=variables[-1].id)]
+    sesh.add_all(vars_per_history)
+
+    sesh.commit()
+    
+    return sesh
 
 @pytest.fixture(scope="module")
 def conn_params():
-    return pycds.test_dsn
+    return dsn
+
+ObsTuple = namedtuple('ObsTuple', 'time datum history variable')
+def ObsMaker(*args):
+    return Obs(**ObsTuple(*args)._asdict())
+
+@pytest.fixture(scope="function")
+def test_db_with_met_obs(test_db_with_variables):
+    sesh = test_db_with_variables
+
+    hist = sesh.query(History).filter(History.station_name == "Masset").first()
+    var = hist.station.network.variables[0]
+
+    timeseries = [(datetime(2015, 1, 1, 10), 1, hist, var),
+                  (datetime(2015, 1, 1, 11), 2, hist, var),
+                  (datetime(2015, 1, 1, 12), 2, hist, var),
+                  (datetime(2015, 1, 1, 13), 1, hist, var)]
+
+    for obs in timeseries:
+        sesh.add(ObsMaker(*obs))
+
+    sesh.commit()
