@@ -6,12 +6,12 @@ from pkg_resources import resource_filename
 import ctypes
 import warnings
 
-__version__ = (0, 0, 6)
+__version__ = (0, 0, 7)
 
 class PyTest(TestCommand):
     def finalize_options(self):
         TestCommand.finalize_options(self)
-        self.test_args = ['-v', '--tb=no', 'tests']
+        self.test_args = '-v --tb=no -m "not poor_unittest" tests'
         self.test_suite = True
     def run_tests(self):
         #import here, cause outside the eggs aren't loaded

@@ -92,9 +92,9 @@ class PcicSqlHandler(object):
 
         full_query = self.get_full_query(station_id, sesh)
 
-        q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom).join(History).join(Network).filter(Station.id == station_id)
+        q = sesh.query(Station.native_id, History.station_name, Network.name, History.the_geom, History.elevation).join(History).join(Network).filter(Station.id == station_id)
         if q.count() < 1:
-            native_id, station_name, network, lat, lon = (native_id, '', net_name, float('nan'), float('nan'))
+            native_id, station_name, network, lat, lon, elevation = (native_id, '', net_name, float('nan'), float('nan'), float('nan'))
         else:
             if q.count() > 1:
                 logger.warning("Multiple history entries (ids {}) were found for a single station_id, but we're reporting locations for the most recent".format([]))
@@ -104,7 +104,7 @@ class PcicSqlHandler(object):
                     raise ValueError("Found multiple history entries for station_id {}, but none have a valid record start date!".format(station_id))
                 q = q.filter(History.sdate == sdate)
 
-            _, station_name, network, geom = q.first()
+            _, station_name, network, geom, elevation = q.first()
             lat, lon = (sesh.scalar(geom.y), sesh.scalar(geom.x)) if geom else (float('nan'), float('nan'))
 
         dsn = self.dsn
@@ -127,6 +127,7 @@ dataset:
     network: "%(network)s"
     latitude: %(lat)f
     longitude: %(lon)f
+    elevation: %(elevation)f
     history: "Created dynamically by the Pydap SQL handler, the Pydap PCIC SQL handler, and the PCIC/CRMP database"
 
 sequence:
