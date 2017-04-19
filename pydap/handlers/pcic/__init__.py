@@ -176,12 +176,16 @@ class RawPcicSqlHandler(PcicSqlHandler):
     virtual = True
 
     def get_full_query(self, stn_id, sesh):
-        '''Sends a special query to the database that actually retrieves generated SQL for constructing an observation table (time by variable) for a single station. Uses the ``query_one_station`` stored procedure.
+        '''Sends a special query to the database that actually retrieves generated SQL for constructing an observation table (time by variable) for a single station. The query needs to return at least one column (obs_time) with additional columns for each available variable, if any. Uses the ``query_one_station`` stored procedure.
 
            :param stn_id: the *database* station_id of the desired station
            :type stn_id: int or str
            :param sesh: an sqlalchemy session
         '''
+	
+        if not self.get_vars(stn_id, sesh):
+            return "SELECT obs_time FROM obs_raw WHERE NULL"
+
         query_string = "SELECT query_one_station(%s)" % stn_id
         return sesh.execute(query_string).fetchone()[0]
 
