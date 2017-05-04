@@ -1,8 +1,12 @@
 language: python
+dist: trusty
+sudo: false
 python:
   - 2.7
-before_install:
-  - sudo apt-get install -qq libspatialite-dev
+addons:
+  apt:
+    packages:
+      - libspatialite-dev
 install:
   - pip install -i https://pypi.pacificclimate.org/simple/ -r test_requirements.txt
   - pip install .
