@@ -11,7 +11,7 @@ __version__ = (0, 0, 8)
 class PyTest(TestCommand):
     def finalize_options(self):
         TestCommand.finalize_options(self)
-        self.test_args = '-v --tb=no -m "not poor_unittest" tests'
+        self.test_args = ["-v", "--tb=no", "-m", "not poor_unittest", "tests"]
         self.test_suite = True
 
     def run_tests(self):
