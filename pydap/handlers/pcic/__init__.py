@@ -105,6 +105,7 @@ class PcicSqlHandler(object):
                 q = q.filter(History.sdate == sdate)
 
             _, station_name, network, geom, elevation = q.first()
+            elevation = elevation if elevation else float('nan')
             lat, lon = (sesh.scalar(geom.y), sesh.scalar(geom.x)) if geom else (float('nan'), float('nan'))
 
         dsn = self.dsn
