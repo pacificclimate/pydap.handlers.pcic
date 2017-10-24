@@ -2,21 +2,90 @@ import datetime
 from collections import namedtuple
 
 import pytest
+import pycds
 from pycds import *
 from pydap.handlers.pcic import RawPcicSqlHandler
 
+import testing.postgresql
 from pycds.util import *
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.schema import DDL, CreateSchema
 from pysqlite2 import dbapi2 as sqlite
 
-dsn = 'sqlite:///'
+
+@pytest.fixture(scope='session')
+def engine():
+    """Test-session-wide database engine"""
+    with testing.postgresql.Postgresql() as pg:
+        engine = create_engine(pg.url())
+        engine.execute("create extension postgis")
+        engine.execute(CreateSchema('crmp'))
+        pycds.Base.metadata.create_all(bind=engine)
+        # sqlalchemy.event.listen(
+        #     pycds.weather_anomaly.Base.metadata,
+        #     'before_create',
+        #     DDL('''
+        #         CREATE OR REPLACE FUNCTION crmp.DaysInMonth(date) RETURNS double precision AS
+        #         $$
+        #             SELECT EXTRACT(DAY FROM CAST(date_trunc('month', $1) + interval '1 month' - interval '1 day'
+        #             as timestamp));
+        #         $$ LANGUAGE sql;
+        #     ''')
+        # )
+        # pycds.weather_anomaly.Base.metadata.create_all(bind=engine)
+        yield engine
+
+
+@pytest.fixture(scope='function')
+def session(engine):
+    """Single-test database session. All session actions are rolled back on teardown"""
+    session = sessionmaker(bind=engine)()
+    # Default search path is `"$user", public`. Need to reset that to search crmp (for our db/orm content) and
+    # public (for postgis functions)
+    session.execute('SET search_path TO crmp, public')
+    # print('\nsearch_path', [r for r in session.execute('SHOW search_path')])
+    yield session
+    session.rollback()
+    session.close()
+
+
+@pytest.fixture(scope='module')
+def mod_blank_postgis_session():
+    with testing.postgresql.Postgresql() as pg:
+        engine = create_engine(pg.url())
+        engine.execute("create extension postgis")
+        engine.execute(CreateSchema('crmp'))
+        sesh = sessionmaker(bind=engine)()
+        yield sesh
+
+
+@pytest.fixture(scope='module')
+def mod_empty_database_session(mod_blank_postgis_session):
+    sesh = mod_blank_postgis_session
+    engine = sesh.get_bind()
+    pycds.Base.metadata.create_all(bind=engine)
+    pycds.weather_anomaly.Base.metadata.create_all(bind=engine)
+    yield sesh
+
+
+@pytest.yield_fixture(scope='function')
+def blank_postgis_session():
+    with testing.postgresql.Postgresql() as pg:
+        engine = create_engine(pg.url())
+        engine.execute("create extension postgis")
+        engine.execute(CreateSchema('crmp'))
+        sesh = sessionmaker(bind=engine)()
+
+        yield sesh
+
 
 @pytest.fixture(scope="function")
-def test_session():
+def test_session(blank_postgis_session):
 
-    engine = create_engine(dsn, module=sqlite, echo=True)
-    engine.echo = True
+    engine = blank_postgis_session.get_bind()
+    pycds.Base.metadata.create_all(bind=engine)
+    pycds.DeferredBase.metadata.create_all(bind=engine)
 
     # Make sure spatial extensions are loaded for each connection, not just the current session
     # https://groups.google.com/d/msg/sqlalchemy/eDpJ-yZEnqU/_XJ4Pmd712QJ
@@ -25,10 +94,7 @@ def test_session():
         dbapi_connection.enable_load_extension(True)
         dbapi_connection.execute("select load_extension('mod_spatialite')")
 
-    create_test_database(engine)
-    Session = sessionmaker(bind=engine)
-    sesh = Session()
-    return sesh
+    yield blank_postgis_session
 
 @pytest.fixture(scope="function")
 def test_db_with_variables(test_session):
@@ -40,12 +106,12 @@ def test_db_with_variables(test_session):
 
     histories = [History(station_name="Invermere",
                          elevation=1000,
-                         the_geom='POINT(-116.0274 50.4989)',
+                         the_geom='SRID=4326;POINT(-116.0274 50.4989)',
                          province='BC',
                          freq='1-hourly'),
                  History(station_name="Masset",
                          elevation=0,
-                         the_geom='POINT(-132.14255 54.01950)',
+                         the_geom='SRID=4326;POINT(-132.14255 54.01950)',
                          province='BC',
                          freq='1-year'),
                  ]
@@ -91,11 +157,11 @@ def test_db_with_variables(test_session):
 
     sesh.commit()
     
-    return sesh
+    yield sesh
 
 @pytest.fixture(scope="module")
-def conn_params():
-    return dsn
+def conn_params(mod_blank_postgis_session):
+    return mod_blank_postgis_session.get_bind()
 
 ObsTuple = namedtuple('ObsTuple', 'time datum history variable')
 def ObsMaker(*args):
@@ -117,6 +183,7 @@ def test_db_with_met_obs(test_db_with_variables):
         sesh.add(ObsMaker(*obs))
 
     sesh.commit()
+    yield sesh
 
 @pytest.fixture(scope="function")
 def session_with_duplicate_station(test_session):
@@ -133,7 +200,8 @@ def session_with_duplicate_station(test_session):
     s.add_all([ecraw, station0, station1, history1])
     s.commit()
 
-    return s
+    yield s
+
 
 @pytest.fixture(scope="function")
 def session_with_multiple_hist_ids_for_one_station(test_session):
@@ -146,12 +214,13 @@ def session_with_multiple_hist_ids_for_one_station(test_session):
     # Empty end date... i.e. and "active station"
     history1 = History(station_name='The same station', elevation=999,
                              sdate = datetime(2000, 1, 2),
-                             the_geom = 'POINT(-118 49)')
+                             the_geom = 'SRID=4326;POINT(-118 49)')
     station0 = Station(native_id='some_station', network=net, histories=[history0, history1])
     s.add(station0)
     s.commit()
 
-    return s
+    yield s
+
 
 @pytest.fixture(scope="function")
 def session_multiple_hist_ids_null_dates(test_session):
@@ -164,7 +233,8 @@ def session_multiple_hist_ids_null_dates(test_session):
     s.add(station0)
     s.commit()
 
-    return s
+    yield s
+
 
 @pytest.fixture(scope="function")
 def raw_handler(monkeypatch, conn_params, test_session):
