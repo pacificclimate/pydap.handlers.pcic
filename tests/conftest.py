@@ -11,7 +11,6 @@ from pycds.util import *
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import DDL, CreateSchema
-from pysqlite2 import dbapi2 as sqlite
 
 
 @pytest.fixture(scope='session')
