@@ -17,6 +17,7 @@ import logging
 from sqlalchemy import or_, not_, func
 from sqlalchemy.orm import sessionmaker
 from paste.httpexceptions import HTTPNotFound
+from geoalchemy2.functions import ST_X, ST_Y
 
 from pydap.wsgi.app import DapServer
 from pydap.handlers.sql import SQLHandler, Engines
@@ -106,7 +107,7 @@ class PcicSqlHandler(object):
 
             _, station_name, network, geom, elevation = q.first()
             elevation = elevation if elevation else float('nan')
-            lat, lon = (sesh.scalar(geom.y), sesh.scalar(geom.x)) if geom else (float('nan'), float('nan'))
+            lat, lon = (sesh.scalar(ST_Y(geom)), sesh.scalar(ST_X(geom))) if geom is not None else (float('nan'), float('nan'))
 
         dsn = self.dsn
         full_query = full_query.replace('"', '\\"')
