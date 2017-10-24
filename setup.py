@@ -45,7 +45,6 @@ setup(
         'paste'
     ],
     tests_require=['pytest',
-                   'pysqlite',
                    'webob'],
     cmdclass={'test': PyTest},
     zip_safe=True,
