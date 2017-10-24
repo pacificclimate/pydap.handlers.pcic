@@ -23,7 +23,7 @@ def test_session():
     @event.listens_for(engine, "connect")
     def connect(dbapi_connection, connection_rec):
         dbapi_connection.enable_load_extension(True)
-        dbapi_connection.execute("select load_extension('libspatialite.so')")
+        dbapi_connection.execute("select load_extension('mod_spatialite')")
 
     create_test_database(engine)
     Session = sessionmaker(bind=engine)

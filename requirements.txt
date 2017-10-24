@@ -1,7 +1,6 @@
 Paste==1.7.5.1
 PyCDS==0.0.18
 SQLAlchemy==0.8.6
-pydap-pdp==3.2.2
-pydap.handlers.sql==0.7
+pydap-pdp==3.2.4
+pydap.handlers.sql==0.10
 pydap.responses.html==0.3
-
