@@ -5,7 +5,7 @@ from pkg_resources import resource_filename
 import ctypes
 import warnings
 
-__version__ = (0, 0, 10)
+__version__ = (0, 0, 11)
 
 
 class PyTest(TestCommand):
