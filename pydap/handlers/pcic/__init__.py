@@ -141,7 +141,7 @@ time:
   col: "obs_time"
   long_name: "observation time"
   units: "days since 1970-01-01"
-  type: String
+  type: Float64
 
 ''' % locals()
 
