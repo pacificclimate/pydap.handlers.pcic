@@ -1,6 +1,7 @@
-Paste==1.7.5.1
+Paste==3.4.0
 PyCDS==2.2.1
-SQLAlchemy==0.8.6
-pydap-pdp==3.2.4
-pydap.handlers.sql==0.10
+SQLAlchemy==1.3.17
+pydap-pdp==3.3.0
+#pydap.handlers.sql==0.10
+/home/james/code/git/pydap.handlers.sql
 pydap.responses.html==0.3

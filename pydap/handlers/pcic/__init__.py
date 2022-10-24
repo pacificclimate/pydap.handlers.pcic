@@ -69,7 +69,7 @@ class PcicSqlHandler(object):
         try:
             with self.session_scope_factory() as sesh:
                 s = self.create_ini(sesh, net_name, native_id)
-        except ValueError, e:
+        except ValueError as e:
             return HTTPNotFound(e.message)(environ, start_response) # 404  
         f = NamedTemporaryFile('w', suffix=self.suffix, delete=False)
         f.write(s)

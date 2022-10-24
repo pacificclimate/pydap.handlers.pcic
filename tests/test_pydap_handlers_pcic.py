@@ -44,7 +44,7 @@ def test_create_ini(raw_handler, net_name, native_id, expected, monkeypatch, tes
     s = raw_handler.create_ini(test_db_with_variables, net_name, native_id)
 
     for substr in expected:
-        print substr
+        print(substr)
         assert substr in s
 
 def test_monkey(raw_handler, test_db_with_variables):

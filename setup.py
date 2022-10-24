@@ -37,10 +37,10 @@ setup(
                     csql = pydap.handlers.pcic:ClimoPcicSqlHandler
                  ''',
     install_requires=[
-        'pydap.handlers.sql',
+#        'pydap.handlers.sql',
         'pycds',
-        'pydap.responses.html',
-        'pydap_pdp >=3.2.1',
+#        'pydap.responses.html',
+#        'pydap_pdp >=3.2.1',
         'sqlalchemy',
         'paste'
     ],
